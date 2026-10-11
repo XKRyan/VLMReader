@@ -1,0 +1,71 @@
+import {useEffect,useRef,useState} from 'react';
+import * as pdfjs from 'pdfjs-dist';
+import type {Book,Mark,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
+import {annotationRange,rangeAtPoint} from './annotations';
+import {selectionFromDoc} from './selection';
+import {fontStack} from './fonts';
+import {t} from './i18n';
+type Content=Awaited<ReturnType<pdfjs.PDFPageProxy['getTextContent']>>;
+function paragraphs(content:Content){
+  const lines:{text:string;y:number}[]=[];let line='',y=0;
+  for(const item of content.items){if(!('str' in item))continue;y=item.transform[5];line+=item.str;if(item.hasEOL){lines.push({text:line.trim(),y});line='';}else if(item.str&&!/\s$/.test(item.str))line+=' ';}if(line.trim())lines.push({text:line.trim(),y});
+  const gaps=lines.slice(1).map((l,i)=>Math.abs(l.y-lines[i].y)).filter(g=>g>1).sort((a,b)=>a-b),normal=gaps[Math.floor(gaps.length/2)]||16;
+  const result:string[]=[];let paragraph='',lastY:number|undefined;
+  for(const l of lines){if(!l.text||lastY!==undefined&&Math.abs(l.y-lastY)>normal*1.45){if(paragraph)result.push(paragraph);paragraph='';}if(l.text)paragraph+=(paragraph?' ':'')+l.text;lastY=l.y;}if(paragraph)result.push(paragraph);return result;
+}
+interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onError:(message:string)=>void}
+export default function PdfDocument(props:Props){
+  const root=useRef<HTMLDivElement>(null),current=useRef(props);current.current=props;
+  const [pages,setPages]=useState<pdfjs.PDFPageProxy[]>([]),[texts,setTexts]=useState<string[][]|null>(null),[width,setWidth]=useState(800),[loading,setLoading]=useState(true);
+  const content=useRef(new Map<number,Promise<Content>>()),plainTexts=useRef(new Map<number,string>()),initialLocation=useRef(props.book.location),active=useRef(1),reported=useRef(0),restored=useRef(false),ranges=useRef(new Map<string,Range>()),pendingNote=useRef<Mark|null>(null);
+  function getContent(index:number){let value=content.current.get(index);if(!value){value=props.doc.getPage(index).then(page=>page.getTextContent()).then(result=>{plainTexts.current.set(index,result.items.map(item=>'str' in item?item.str:'').join(' '));return result;});content.current.set(index,value);}return value;}
+  async function pageText(index:number){const result=await getContent(index);return result.items.map(item=>'str' in item?item.str:'').join(' ');}
+  function pageElement(index:number){return root.current?.querySelector<HTMLElement>(`[data-pdf-page="${index}"]`)||null;}
+  function go(where:string|number){const value=Math.max(1,Math.min(props.doc.numPages+.99,Number(where)||1)),index=Math.floor(value),page=pageElement(index),surface=props.surface.current;if(page&&surface){surface.scrollTop+=page.getBoundingClientRect().top-surface.getBoundingClientRect().top-16+(value-index)*page.getBoundingClientRect().height;active.current=index;report();}}
+  function report(){const surface=props.surface.current;if(!restored.current||!surface||!root.current)return;const target=surface.getBoundingClientRect().top+Math.min(160,surface.clientHeight/3);const nodes=[...root.current.querySelectorAll<HTMLElement>('[data-pdf-page]')];const page=nodes.find(node=>node.getBoundingClientRect().bottom>target)||nodes.at(-1);if(!page)return;
+    const index=Number(page.dataset.pdfPage),offset=Math.max(0,Math.min(.99,(surface.getBoundingClientRect().top-page.getBoundingClientRect().top)/Math.max(1,page.getBoundingClientRect().height)));active.current=index;
+    current.current.onProgress(index+offset,(index-1+offset)/props.doc.numPages);
+    if(reported.current!==index){reported.current=index;void pageText(index).then(text=>{if(active.current===index)current.current.onMeta({index,count:props.doc.numPages,toc:[],scanned:!text.trim()});}).catch(error=>current.current.onError(error.message));}
+  }
+  function paintNotes(){
+    const next=new Map<string,Range>();for(const note of current.current.notes){const page=pageElement(Math.floor(Number(note.location))),body=page?.querySelector('[data-annotation-root]');if(body){const range=annotationRange(body,note);if(range)next.set(note.id,range);}}
+    ranges.current=next;CSS.highlights.set('memreader-notes',new Highlight(...next.values()));paintSpeech();
+    if(pendingNote.current&&next.has(pendingNote.current.id)){const note=pendingNote.current;pendingNote.current=null;locate(note);}
+  }
+  function paintSpeech(){const body=pageElement(active.current)?.querySelector('[data-annotation-root]'),text=current.current.speechText.trim(),range=body&&text?annotationRange(body,{text}):null;if(range)CSS.highlights.set('memreader-speech',new Highlight(range));else CSS.highlights.delete('memreader-speech');}
+  useEffect(()=>{paintSpeech();},[props.speechText]);
+  function locate(note:Mark){const surface=props.surface.current,range=ranges.current.get(note.id);if(surface&&range?.getClientRects().length){surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}else{pendingNote.current=note;go(note.location);}}
+  useEffect(()=>{let alive=true;setLoading(true);void (async()=>{const result:pdfjs.PDFPageProxy[]=[];for(let at=1;at<=props.doc.numPages;at+=16){const batch=await Promise.all(Array.from({length:Math.min(16,props.doc.numPages-at+1)},(_,i)=>props.doc.getPage(at+i)));result.push(...batch);}if(alive){setPages(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;CSS.highlights.delete('memreader-notes');CSS.highlights.delete('memreader-speech');};},[props.doc]);
+  useEffect(()=>{const surface=props.surface.current;if(!surface)return;const resize=new ResizeObserver(()=>setWidth(Math.min(surface.clientWidth-64,current.current.settings.contentWidth+180)));resize.observe(surface);return()=>resize.disconnect();},[props.doc,props.surface]);
+  useEffect(()=>{const surface=props.surface.current;if(surface)setWidth(Math.min(surface.clientWidth-64,props.settings.contentWidth+180));},[props.settings.contentWidth]);
+  useEffect(()=>{let alive=true;if(!props.settings.pdfTextMode){setTexts(null);setLoading(!pages.length);return;}setLoading(true);void (async()=>{const result:string[][]=[];for(let at=1;at<=props.doc.numPages;at+=8){const batch=await Promise.all(Array.from({length:Math.min(8,props.doc.numPages-at+1)},(_,i)=>getContent(at+i)));result.push(...batch.map(paragraphs));}if(alive){setTexts(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;};},[props.settings.pdfTextMode,props.doc]);
+  useEffect(()=>{if(loading||!pages.length||props.settings.pdfTextMode&&!texts)return;const surface=props.surface.current;if(!surface)return;const frame=requestAnimationFrame(()=>{if(!restored.current){restored.current=true;go(initialLocation.current||1);}else go(active.current);paintNotes();report();});return()=>cancelAnimationFrame(frame);},[loading,pages.length,props.settings.pdfTextMode,texts]);
+  useEffect(()=>{paintNotes();},[props.notes]);
+  useEffect(()=>{const surface=props.surface.current;if(!surface)return;let frame=0,timer:ReturnType<typeof setTimeout>|undefined;const scroll=()=>{cancelAnimationFrame(frame);clearTimeout(timer);timer=setTimeout(()=>{frame=requestAnimationFrame(report);},100);};surface.addEventListener('scroll',scroll);return()=>{surface.removeEventListener('scroll',scroll);cancelAnimationFrame(frame);clearTimeout(timer);};},[pages.length,props.doc]);
+  useEffect(()=>{props.control.current={prev:()=>go(Math.max(1,active.current-1)),next:()=>go(Math.min(props.doc.numPages,active.current+1)),go,getText:()=>plainTexts.current.get(active.current)||'',
+    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,locate,
+    search:async query=>{const result=[];for(let index=1;index<=props.doc.numPages;index++){const text=await pageText(index),at=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());if(at>=0)result.push({label:t('第')+' '+index+' '+t('页'),location:index,excerpt:text.slice(Math.max(0,at-65),at+150)});if(result.length>=80)break;}return result;}};return()=>{props.control.current=null;};},[pages.length,props.doc]);
+  function select(){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
+    if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);return;}
+    const info=selectionFromDoc(document,element.textContent||'',Number(element.dataset.pdfPage));if(info)current.current.onSelection(info);
+  }
+  const lastClicked=useRef<string|null>(null);
+  return <div ref={root} className={props.settings.pdfTextMode?'prose pdf-text-document pdf-continuous':'pdf-document pdf-continuous'} style={props.settings.pdfTextMode?{fontSize:props.settings.fontSize,lineHeight:props.settings.lineHeight,maxWidth:props.settings.contentWidth,fontFamily:fontStack(props.settings.readingFont,props.settings.fontFamily==='serif')}:undefined} onWheel={()=>current.current.onNavigate()} onMouseDown={event=>{lastClicked.current=rangeAtPoint(ranges.current,event.clientX,event.clientY);}} onMouseUp={select} onMouseMove={event=>{const id=rangeAtPoint(ranges.current,event.clientX,event.clientY);event.currentTarget.title=current.current.notes.find(note=>note.id===id)?.note||'';}}>
+    {loading&&<div className="reader-loading"><span className="spinner"/>{t('正在打开文档…')}</div>}
+    {props.settings.pdfTextMode?texts?.map((page,index)=><section className="pdf-text-page" data-pdf-page={index+1} key={index}><div className="pdf-page-label" data-ui>{index+1}</div><div data-annotation-root>{page.map((text,i)=><p key={i}>{text}</p>)}{!page.length&&<p className="pdf-empty-page">{t('此页没有可提取的文字')}</p>}</div></section>):pages.map((page,index)=><PdfPage key={index} page={page} width={width*props.zoom} surface={props.surface} onReady={()=>{if(pageElement(index+1)?.querySelector('.textLayer'))void getContent(index+1);paintNotes();report();}} onError={props.onError}/>)}
+  </div>;
+}
+function PdfPage({page,width,surface,onReady,onError}:{page:pdfjs.PDFPageProxy;width:number;surface:React.RefObject<HTMLDivElement|null>;onReady:()=>void;onError:(message:string)=>void}){
+  const holder=useRef<HTMLDivElement>(null),section=useRef<HTMLElement>(null),current=useRef({onReady,onError});current.current={onReady,onError};const [visible,setVisible]=useState(false),[busy,setBusy]=useState(true);
+  const initial=page.getViewport({scale:1}),viewport=page.getViewport({scale:width/initial.width});
+  useEffect(()=>{if(!section.current||!surface.current)return;const observer=new IntersectionObserver(entries=>setVisible(entries[0].isIntersecting),{root:surface.current,rootMargin:'900px 0px'});observer.observe(section.current);return()=>observer.disconnect();},[surface]);
+  useEffect(()=>{const body=holder.current;if(!body)return;body.innerHTML='';setBusy(visible);if(!visible){current.current.onReady();return;}
+    let cancelled=false,renderTask:ReturnType<pdfjs.PDFPageProxy['render']>|undefined,textTask:pdfjs.TextLayer|undefined;
+    void (async()=>{const dpr=devicePixelRatio||1,canvas=document.createElement('canvas');canvas.width=Math.floor(viewport.width*dpr);canvas.height=Math.floor(viewport.height*dpr);canvas.style.width=viewport.width+'px';canvas.style.height=viewport.height+'px';body.append(canvas);
+      body.style.setProperty('--scale-factor',String(viewport.scale));body.style.setProperty('--user-unit',String(viewport.userUnit));body.style.setProperty('--total-scale-factor',String(viewport.scale*viewport.userUnit));body.style.setProperty('--scale-round-x','1px');body.style.setProperty('--scale-round-y','1px');
+      renderTask=page.render({canvas,canvasContext:canvas.getContext('2d')!,viewport,transform:dpr!==1?[dpr,0,0,dpr,0,0]:undefined});await renderTask.promise;if(cancelled)return;const layer=document.createElement('div');layer.className='textLayer';layer.dataset.annotationRoot='';body.append(layer);textTask=new pdfjs.TextLayer({textContentSource:await page.getTextContent(),container:layer,viewport});await textTask.render();if(!cancelled){setBusy(false);current.current.onReady();}
+    })().catch(error=>{if(!cancelled&&error.name!=='RenderingCancelledException'){setBusy(false);current.current.onError(error.message);}});
+    return()=>{cancelled=true;renderTask?.cancel();textTask?.cancel();};
+  },[visible,width,page]);
+  return <section ref={section} className="pdf-page-block" data-pdf-page={page.pageNumber} style={{width:viewport.width,height:viewport.height}}><div className="pdf-page" ref={holder} style={{width:viewport.width,height:viewport.height}}/>{busy&&visible&&<div className="pdf-page-loading"><span className="spinner"/></div>}</section>;
+}

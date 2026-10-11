@@ -1,0 +1,11 @@
+import {Highlighter,Plus,Trash2,Pencil,X,ArrowUpRight} from 'lucide-react';
+import type {Mark,SelectionInfo} from './types';
+import {t} from './i18n';
+export type AnnotationDraft=Partial<Mark>&Pick<Mark,'text'|'location'>;
+export default function AnnotationPanel({notes,draft,busy,canAdd,onChange,onNew,onSave,onClose,onEdit,onDelete,onLocate}:{notes:Mark[];draft:AnnotationDraft|null;busy:boolean;canAdd:boolean;onChange:(draft:AnnotationDraft)=>void;onNew:()=>void;onSave:()=>void;onClose:()=>void;onEdit:(mark:Mark)=>void;onDelete:(mark:Mark)=>void;onLocate:(mark:Mark)=>void}){
+  return <div className="marks-list"><div className="annotation-heading"><strong>{t('文档批注')} <span>{notes.length}</span></strong><button className="secondary compact" disabled={!canAdd} onClick={onNew}><Plus size={14}/>{t('添加批注')}</button></div>
+    {draft&&<section className="annotation-editor"><div className="annotation-editor-heading"><strong>{t(draft.id?'编辑批注':'新建批注')}</strong><button className="icon-button" aria-label={t('关闭批注编辑')} onClick={onClose} disabled={busy}><X size={17}/></button></div><blockquote>{draft.text}</blockquote><textarea autoFocus aria-label={t('批注内容')} placeholder={t('记录理解、问题或想法…')} value={draft.note||''} onChange={event=>onChange({...draft,note:event.target.value})}/><div className="annotation-editor-actions"><button className="secondary compact" onClick={onClose} disabled={busy}>{t('取消')}</button><button className="primary compact" disabled={busy} onClick={onSave}>{t(busy?'正在保存…':'保存批注')}</button></div></section>}
+    {notes.map(note=><article className="note-card" key={note.id} data-note-id={note.id}><button className="note-quote" title={t('定位原文')} onClick={()=>onLocate(note)}>{note.text}</button>{note.note&&<p>{note.note}</p>}<div className="note-meta"><span>{new Date(note.createdAt).toLocaleDateString()}</span><div><button className="icon-button" aria-label={t('编辑批注')} onClick={()=>onEdit(note)}><Pencil size={16}/></button><button className="icon-button" aria-label={t('定位原文')} onClick={()=>onLocate(note)}><ArrowUpRight size={16}/></button><button className="icon-button" aria-label={t('删除批注')} onClick={()=>onDelete(note)}><Trash2 size={16}/></button></div></div></article>)}
+    {!notes.length&&!draft&&<div className="annotation-empty"><Highlighter size={28}/><p>{t('选中原文后添加批注。')}</p></div>}
+  </div>;
+}

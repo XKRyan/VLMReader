@@ -1,0 +1,13 @@
+const {contextBridge,ipcRenderer,webUtils}=require('electron');
+const invoke=channel=>(...args)=>ipcRenderer.invoke(channel,...args);
+contextBridge.exposeInMainWorld('mem',{
+  boot:invoke('boot'), importBooks:invoke('books:import'), readBook:invoke('books:read'), updateBook:invoke('books:update'), deleteBook:invoke('books:delete'),
+  lookup:invoke('dictionary:lookup'), collect:invoke('entries:collect'), translate:invoke('entries:translate'), translateSelection:invoke('selection:translate'), updateEntry:invoke('entries:update'), deleteEntry:invoke('entries:delete'), deleteEntries:invoke('entries:delete-many'),
+  review:invoke('entries:review'), undoReview:invoke('entries:undo'), intervals:invoke('entries:intervals'),
+  bookmark:invoke('bookmarks:add'), deleteBookmark:invoke('bookmarks:delete'), note:invoke('notes:add'), updateNote:invoke('notes:update'), deleteNote:invoke('notes:delete'),
+  saveSettings:invoke('settings:save'), testApi:invoke('settings:test-api'), exportData:invoke('data:export'), importData:invoke('data:import'), backup:invoke('data:backup'),
+  speak:invoke('speech:generate'),startSpeech:invoke('speech:start'),cancelSpeech:invoke('speech:cancel'),warmSpeech:invoke('speech:warm'), minute:invoke('stats:minute'), fullscreen:invoke('window:fullscreen'), print:invoke('window:print'), openData:invoke('data:open'),
+  onSpeech:fn=>{const listener=(_event,message)=>fn(message);ipcRenderer.on('speech:event',listener);return()=>ipcRenderer.removeListener('speech:event',listener);},
+  getPath:file=>webUtils.getPathForFile(file),
+  onImport:fn=>{const listener=()=>fn();ipcRenderer.on('import-request',listener);return()=>ipcRenderer.removeListener('import-request',listener);},
+});

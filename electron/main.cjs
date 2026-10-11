@@ -1,0 +1,127 @@
+const {app,BrowserWindow,dialog,ipcMain,safeStorage,shell,Menu}=require('electron');
+const fs=require('node:fs');
+const path=require('node:path');
+const crypto=require('node:crypto');
+const {SpeechService}=require('./speech.cjs');
+const {Store,DEFAULTS}=require('./store.cjs');
+const {Dictionary}=require('./dictionary.cjs');
+const {makeEntry,normalize,reviewEntry,reviewIntervals,vocabularyCsv}=require('./core.cjs');
+const {translate,validateBase}=require('./translation.cjs');
+const isTest=process.env.MEMREADER_TEST==='1';
+if(process.platform==='win32')app.setAppUserModelId('study.memreader.desktop');
+const assets=app.isPackaged?path.join(process.resourcesPath,'assets'):path.join(__dirname,'..','assets');
+const baseDir=app.isPackaged?path.resolve(path.dirname(process.execPath),'..','..'):path.join(__dirname,'..');
+const dataDir=isTest?process.env.MEMREADER_TEST_DATA:path.join(baseDir,'data');
+app.setPath('userData',path.join(dataDir,'runtime'));
+const store=new Store(dataDir);
+const dictionary=new Dictionary(assets);
+let main;const speechService=new SpeechService(assets,dataDir);
+const ui=(zh,en)=>store.state.settings.language==='en'?en:zh;
+function updateMenu(){
+  Menu.setApplicationMenu(null);
+}
+function updateChrome(){const night=store.state.settings.theme==='night',colors={paper:'#f6f5f0',white:'#f6f7fb',sage:'#f0f5f3',night:'#171c26'};main?.setTitleBarOverlay({color:colors[store.state.settings.theme]||colors.white,symbolColor:night?'#e5e9f2':'#31394a',height:44});}
+const formats=new Set(['pdf','epub','docx','txt','md','html','htm']);
+function getKey(){
+  const p=path.join(dataDir,'api-key.bin');if(!fs.existsSync(p))return '';
+  try{return safeStorage.decryptString(fs.readFileSync(p));}catch{return '';}
+}
+function safeState(){return {...store.state,settings:{...store.state.settings,apiKeySet:!!getKey()},dataDir,dictionaryInfo:fs.existsSync(path.join(assets,'dictionary-info.json'))?JSON.parse(fs.readFileSync(path.join(assets,'dictionary-info.json'),'utf8')):null,ttsReady:fs.existsSync(path.join(assets,'kokoro-multi-lang-v1_1','model.onnx'))};}
+function entryById(id){const e=store.state.entries.find(e=>e.id===id);if(!e)throw Error('生词条目不存在');return e;}
+function bookById(id){const b=store.state.books.find(b=>b.id===id);if(!b)throw Error('文档不存在');return b;}
+async function importBooks(paths){
+  if(!paths){const result=await dialog.showOpenDialog(main,{title:ui('导入阅读文档','Import reading documents'),properties:['openFile','multiSelections'],filters:[{name:ui('支持的文档','Supported documents'),extensions:[...formats]}]});if(result.canceled)return [];paths=result.filePaths;}
+  if(!Array.isArray(paths) || paths.length>100)throw Error('一次最多导入 100 个文档');
+  const added=[];
+  for(const filename of paths){
+    if(typeof filename!=='string'||!path.isAbsolute(filename))continue;
+    const ext=path.extname(filename).slice(1).toLowerCase();if(!formats.has(ext))continue;
+    const info=fs.statSync(filename);if(!info.isFile()||info.size>300*1024*1024)throw Error('文档过大（上限 300 MB）：'+path.basename(filename));
+    const hash=crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
+    const existing=store.state.books.find(b=>b.hash===hash);if(existing){added.push(existing);continue;}
+    const id=crypto.randomUUID();const dest=path.join(dataDir,'books',id+'.'+ext);fs.copyFileSync(filename,dest);
+    const book={id,hash,format:ext,title:path.basename(filename,path.extname(filename)),size:info.size,createdAt:new Date().toISOString(),lastRead:null,progress:0,location:null,favorite:false};
+    store.state.books.unshift(book);added.push(book);
+  }
+  store.save();return added;
+}
+async function generateSpeech(text,sid){
+  return speechService.generate(text,sid);
+}
+app.whenReady().then(async()=>{
+  main=new BrowserWindow({width:1400,height:940,minWidth:1000,minHeight:720,title:'MemReader',backgroundColor:'#f6f7fb',show:!isTest,titleBarStyle:'hidden',titleBarOverlay:{color:'#f6f7fb',symbolColor:'#31394a',height:44},
+    icon:path.join(assets,'icon.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+  main.webContents.setWindowOpenHandler(()=>({action:'deny'}));
+  main.webContents.on('will-navigate',event=>event.preventDefault());
+  updateMenu();
+  updateChrome();
+  main.webContents.on('before-input-event',(event,input)=>{if(input.type!=='keyDown')return;if((input.control||input.meta)&&input.key.toLowerCase()==='o'){event.preventDefault();main.webContents.send('import-request');}if(input.key==='F11'){event.preventDefault();main.setFullScreen(!main.isFullScreen());}});
+  const handle=(channel,fn)=>ipcMain.handle(channel,(_event,...args)=>fn(...args));
+  handle('boot',()=>safeState());
+  handle('books:import',importBooks);
+  handle('books:read',async id=>{
+    const b=bookById(id);b.lastRead=new Date().toISOString();store.save();
+    const p=path.join(dataDir,'books',b.id+'.'+b.format);
+    if(b.format==='docx'){const mammoth=require('mammoth');const result=await mammoth.convertToHtml({path:p});return {html:result.value,warnings:result.messages.map(m=>m.message)};}
+    if(['txt','md','html','htm'].includes(b.format)){const bytes=fs.readFileSync(p);let text;if(bytes[0]===255&&bytes[1]===254)text=bytes.subarray(2).toString('utf16le');else if(bytes[0]===254&&bytes[1]===255)text=Buffer.from(bytes.subarray(2)).swap16().toString('utf16le');else{try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{text=new TextDecoder('gb18030').decode(bytes);}}return {text};}
+    return {bytes:new Uint8Array(fs.readFileSync(p))};
+  });
+  handle('books:update',(id,patch)=>{const b=bookById(id);for(const key of ['title','location','progress','favorite','cover','pageCount'])if(key in patch)b[key]=patch[key];b.lastRead=new Date().toISOString();store.save();return b;});
+  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.save();return true;});
+  handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
+  handle('entries:collect',async input=>{
+    const text=normalize(input.text);let e=store.state.entries.find(e=>e.text.toLocaleLowerCase()===text.toLocaleLowerCase());
+    if(e){e.encounters++;if(input.context&&input.context!==e.context)e.contexts=[...e.contexts,{context:normalize(input.context),bookId:input.bookId,bookTitle:input.bookTitle,location:input.location}].slice(-50);store.save();return e;}
+    e=makeEntry(input);const found=await dictionary.lookup(text).catch(()=>null);
+    if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
+    store.state.entries.unshift(e);store.save();return e;
+  });
+  handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());Object.assign(e,result,{updatedAt:new Date().toISOString()});store.save();return e;});
+  handle('selection:translate',(text,context)=>translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey()));
+  handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
+  handle('entries:delete',id=>{store.deleteEntries([id]);return true;});
+  handle('entries:delete-many',ids=>store.deleteEntries(ids));
+  handle('entries:review',(id,rating)=>{
+    const e=entryById(id);if(!e.translation)throw Error('请先补全译文再复习');
+    const updated=reviewEntry(e,rating);Object.assign(e,updated);store.state.stats.reviews.push({entryId:id,rating,time:new Date().toISOString(),isNew:e.card.reps===1});store.save();return e;
+  });
+  handle('entries:undo',id=>{const e=entryById(id);const last=e.history.pop();if(last){e.card=last.before;const index=store.state.stats.reviews.findLastIndex(r=>r.entryId===id);if(index>=0)store.state.stats.reviews.splice(index,1);store.save();}return e;});
+  handle('entries:intervals',id=>reviewIntervals(entryById(id)));
+  handle('bookmarks:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.bookmarks.unshift(item);store.save();return item;});
+  handle('bookmarks:delete',id=>{store.state.bookmarks=store.state.bookmarks.filter(b=>b.id!==id);store.save();});
+  handle('notes:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.notes.unshift(item);store.save();return item;});
+  handle('notes:update',(id,patch)=>{const mark=store.state.notes.find(note=>note.id===id);if(!mark)throw Error('批注不存在');if(typeof patch.note==='string')mark.note=patch.note.slice(0,12000);mark.updatedAt=new Date().toISOString();store.save();return mark;});
+  handle('notes:delete',id=>{store.state.notes=store.state.notes.filter(n=>n.id!==id);store.save();});
+  handle('settings:save',input=>{
+    const updates={...input};
+    if('uiFontSize' in updates && (!Number.isInteger(updates.uiFontSize)||updates.uiFontSize<13||updates.uiFontSize>22))throw Error('界面字号需为 13–22px');
+    if(updates.apiBase)updates.apiBase=validateBase(updates.apiBase);
+    if('apiKey' in updates){const key=String(updates.apiKey).trim();if(key){if(!safeStorage.isEncryptionAvailable())throw Error('系统加密存储暂不可用');fs.writeFileSync(path.join(dataDir,'api-key.bin'),safeStorage.encryptString(key));}else{const p=path.join(dataDir,'api-key.bin');if(fs.existsSync(p))fs.unlinkSync(p);}delete updates.apiKey;}
+    for(const key of Object.keys(DEFAULTS))if(key in updates && key!=='apiKeySet')store.state.settings[key]=updates[key];
+    store.save();if('language' in updates)updateMenu();if('theme' in updates)updateChrome();return {...store.state.settings,apiKeySet:!!getKey()};
+  });
+  handle('settings:test-api',()=>translate('Learning builds lasting understanding.','',store.state.settings,getKey()));
+  handle('speech:generate',generateSpeech);
+  ipcMain.handle('speech:start',(event,id,text,enVoice,zhVoice)=>speechService.stream(String(id),text,enVoice,zhVoice,event.sender));
+  ipcMain.handle('speech:cancel',(event,id)=>speechService.cancel(String(id),event.sender));
+  handle('speech:warm',(text,enVoice,zhVoice)=>speechService.stream('',text,enVoice,zhVoice,null,true));
+  handle('stats:minute',()=>{store.state.stats.minutes++;store.save();});
+  handle('window:fullscreen',()=>{main.setFullScreen(!main.isFullScreen());return main.isFullScreen();});
+  handle('window:print',()=>new Promise(resolve=>main.webContents.print({printBackground:true},(ok,reason)=>resolve({ok,reason}))));
+  handle('data:open',()=>shell.openPath(dataDir));
+  handle('data:export',async type=>{
+    const csv=type==='csv';const result=await dialog.showSaveDialog(main,{defaultPath:'MemReader-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
+    if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(store.state.entries):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
+  });
+  handle('data:import',async()=>{
+    const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('MemReader JSON 备份','MemReader JSON backup'),extensions:['json']}]});if(result.canceled)return null;
+    const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 MemReader 备份');
+    let count=0;for(const e of imported.entries){if(typeof e.text!=='string'||!e.card||!e.card.due)continue;if(!store.state.entries.some(x=>x.text.toLocaleLowerCase()===e.text.toLocaleLowerCase())){store.state.entries.push({...makeEntry(e),...e,id:crypto.randomUUID()});count++;}}
+    store.save();return count;
+  });
+  handle('data:backup',()=>{const p=path.join(dataDir,'backups','MemReader-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
+  if(!store.state.books.length && fs.existsSync(path.join(assets,'欢迎阅读.html')))await importBooks([path.join(assets,'欢迎阅读.html')]);
+  if(process.env.MEMREADER_DEV)await main.loadURL(process.env.MEMREADER_DEV);else await main.loadFile(path.join(__dirname,'..','dist','index.html'));
+});
+app.on('window-all-closed',()=>app.quit());
+app.on('before-quit',()=>{speechService.close();store.save();});

@@ -1,0 +1,72 @@
+{
+  "name": "memreader",
+  "version": "0.3.0",
+  "description": "MemReader — 阅读、翻译与记忆",
+  "author": "MemReader",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "package": "pnpm build && electron-builder --win dir --x64 && node scripts/finalize_package.cjs"
+  },
+  "dependencies": {
+    "@breezystack/lamejs": "^1.2.7",
+    "@fontsource/inter": "^5.2.8",
+    "dompurify": "^3.3.0",
+    "epubjs": "^0.3.93",
+    "lucide-react": "^0.468.0",
+    "mammoth": "^1.11.0",
+    "marked": "^17.0.0",
+    "pdfjs-dist": "^5.4.394",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sherpa-onnx-node": "1.13.8",
+    "sql.js": "^1.13.0",
+    "ts-fsrs": "^5.2.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "44.7.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.0"
+  },
+  "build": {
+    "appId": "study.memreader.desktop",
+    "productName": "MemReader",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "assets",
+        "to": "assets"
+      }
+    ],
+    "asarUnpack": [
+      "electron/tts-worker.cjs",
+      "**/@breezystack/lamejs/**",
+      "**/sherpa-onnx*/**",
+      "**/*.node",
+      "**/*.dll"
+    ],
+    "win": {
+      "target": "dir",
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "npmRebuild": false
+  }
+}

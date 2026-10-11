@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.pdf binary
+*.epub binary
+*.docx binary
+*.png binary
+*.ico binary
+*.gz binary

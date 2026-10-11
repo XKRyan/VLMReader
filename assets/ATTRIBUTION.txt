@@ -1,0 +1,29 @@
+MemReader — third-party resources
+
+ECDICT: https://github.com/skywind3000/ECDICT
+License: MIT (see ECDICT-LICENSE.txt). The complete imported entry is retained without abbreviation.
+
+CC-CEDICT: https://www.mdbg.net/chinese/dictionary?page=cedict
+License: Creative Commons Attribution-ShareAlike 4.0.
+License text: https://creativecommons.org/licenses/by-sa/4.0/
+The dictionary data in dictionary.sqlite is a converted, merged representation of ECDICT and CC-CEDICT.
+CC-CEDICT-derived Chinese entries remain available under CC BY-SA 4.0.
+Conversion: traditional/simplified lookup keys and merged senses with pronunciation; no definitions removed.
+
+Kokoro bilingual v1.1: https://k2-fsa.github.io/sherpa/onnx/tts/all/Chinese-English/kokoro-multi-lang-v1_1.html
+Model license and supporting files are included in kokoro-multi-lang-v1_1/.
+sherpa-onnx: https://github.com/k2-fsa/sherpa-onnx (Apache-2.0).
+
+Spaced-repetition scheduler: https://github.com/open-spaced-repetition/ts-fsrs (MIT).
+Research supporting spaced practice: https://pubmed.ncbi.nlm.nih.gov/16719566/
+Research supporting retrieval practice: https://pubmed.ncbi.nlm.nih.gov/16507066/
+No claim that any algorithm is universally best for every learner.
+
+Node.js runtime v24.19.0: https://nodejs.org/
+License: MIT with bundled third-party notices; see runtime/Node-LICENSE.txt.
+
+MP3 streaming encoder: @breezystack/lamejs (LGPL-3.0), unmodified external dependency.
+Source: https://github.com/shijinyu/lamejs
+Original LAME: https://github.com/zhuker/lamejs and https://lame.sourceforge.io/
+License and source distribution are supplied in lamejs/.
+Sentence practice is a product design based on retrieval and spacing; it is not claimed to be a uniquely optimal sentence-learning method.
