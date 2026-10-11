@@ -8,7 +8,7 @@ async function launch(){const env={...process.env,MEMREADER_TEST:'1',MEMREADER_T
 (async()=>{
   let app=await launch();const errors=[];
   try{
-    let page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.getByRole('button',{name:'偏好设置',exact:true}).waitFor();
+    let page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.getByRole('button',{name:'偏好设置',exact:true}).waitFor();assert.equal(await page.title(),'VLM');assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getTitle()),'VLM');
     await app.evaluate(({BrowserWindow})=>{const win=BrowserWindow.getAllWindows()[0];win.setSize(1400,940);win.showInactive();});
     await page.evaluate(()=>window.mem.saveSettings({preloadSpeech:false}));
     const books=await page.evaluate(files=>window.mem.importBooks(files),[path.join(__dirname,'fixtures/Courier.pdf'),path.join(__dirname,'fixtures/Learning.docx'),path.join(__dirname,'fixtures/Learning.epub'),textFile]);
