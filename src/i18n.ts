@@ -35,6 +35,18 @@ Object.assign(english,{
   '自动收集单词':'Collect words automatically','保存单词、完整释义与原句':'Save words, full definitions and context','自动收集句子':'Collect sentences automatically','默认关闭；句子仍可翻译与批注':'Off by default. Sentences can still be translated and annotated.','提前准备语音':'Prepare speech ahead','阅读时在后台准备；已生成语音保留在本机':'Prepare in the background and retain generated speech locally','此页没有可提取的文字':'No extractable text on this page',
   '添加单词':'Add word','添加的单词':'Word to add','关闭添加单词':'Close add word','输入英文或中文词语':'Enter an English or Chinese word','正在查询离线词典…':'Looking up the offline dictionary…','词典未收录，可填写释义后添加。':'No dictionary entry. Enter a meaning to add it.','自动查询离线词典，无需 API。':'Automatic offline lookup. No API needed.','释义':'Meaning','单词释义':'Word meaning','原句（可选）':'Context (optional)','单词原句':'Word context','添加到生词本':'Add to vocabulary','已添加到生词本':'Added to vocabulary','手动添加':'Manually added'
 });
+Object.assign(english,{
+  '调整配色':'Customize colors','主题色':'Accent color','界面背景':'Interface background','阅读底色':'Reading background','正文文字':'Reading text','色值':'hex value',
+  '常用主题色':'Accent presets','配色预览':'Color preview','阅读预览':'Reading preview','恢复默认配色':'Reset colors','应用配色':'Apply colors',
+  '请选择主题色':'Choose accent color','选择主题色':'Choose accent color','选择界面背景':'Choose interface background','选择阅读底色':'Choose reading background','选择正文文字':'Choose reading text color',
+  '请输入 #RRGGBB 或 #RGB 色值':'Enter a #RRGGBB or #RGB color','文字与底色的对比度较低，可调整后预览。':'Text contrast is low. Adjust the colors and preview again.'
+});
+Object.assign(english,{
+  '管理':'Manage','完成管理':'Done','选择词本':'Choose notebook','新建词本':'New notebook','词本设置':'Notebook settings','全部词条':'All vocabulary','未归类':'Unfiled','将所选加入词本':'Add selected to notebook','加入词本…':'Add to notebook…','移出词本':'Remove from notebook','词本已保存':'Notebook saved','词本已删除，生词仍保留':'Notebook removed. Vocabulary is retained.',
+  '关闭词本设置':'Close notebook settings','删除词本？':'Delete notebook?','词本名称':'Notebook name','例如：英语阅读':'e.g. English reading','关联书架文档':'Linked documents','本':'documents','这些文档之后查到的新词，会自动加入此词本。':'New words from these documents will be added here automatically.',
+  '搜索关联文档':'Search linked documents','关联':'Link','没有匹配的文档':'No matching documents','先在书架导入文档，也可以先建立空词本。':'Import documents first, or create an empty notebook.','同时收录已有生词':'Include existing vocabulary','删除词本':'Delete notebook','确认删除词本':'Delete notebook','保存词本':'Save notebook','创建词本':'Create notebook','只删除词本分区，生词和复习记录仍保留。':'Only the notebook is removed. Vocabulary and review records are kept.',
+  '词本不存在':'Notebook not found','词本名称需为 1–60 个字符':'Notebook names must contain 1–60 characters','已经有同名词本':'A notebook with this name already exists','请选择书架中的文档':'Choose documents from the library','选择复习词本':'Choose review notebook','重学条目将在':'Relearning cards return in','秒后自动出现':'seconds','资料保存失败：':'Could not save data: '
+});
 export function t(value:string):string{
   if(language==='zh')return value;
   if(english[value]!==undefined)return english[value];

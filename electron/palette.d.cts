@@ -1,0 +1,10 @@
+import type {Settings} from '../src/types';
+export type Theme=Settings['theme'];
+export type ColorKey='accent'|'bg'|'paper'|'readingText';
+export type ColorOverrides=Partial<Record<ColorKey,string>>;
+export type Palette=Record<'bg'|'surface'|'paper'|'sidebar'|'text'|'readingText'|'muted'|'line'|'secondary'|'accent'|'accentText'|'onAccent'|'accentHover'|'soft'|'selection'|'annotationFill'|'danger'|'shadow',string>;
+export const BASE:Record<Theme,Pick<Palette,'bg'|'surface'|'paper'|'sidebar'|'text'|'muted'|'line'|'secondary'|'accent'>>;
+export function color(value:unknown):string|null;
+export function sanitizeColorThemes(input:unknown,strict?:boolean):Partial<Record<Theme,ColorOverrides>>;
+export function getPalette(settings:Pick<Settings,'theme'|'colorThemes'>):Palette;
+export function contrast(a:string,b:string):number;

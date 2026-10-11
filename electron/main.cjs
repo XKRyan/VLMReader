@@ -4,6 +4,8 @@ const path=require('node:path');
 const crypto=require('node:crypto');
 const {SpeechService}=require('./speech.cjs');
 const {Store,DEFAULTS}=require('./store.cjs');
+const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
+const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,vocabularyCsv}=require('./core.cjs');
 const {translate,validateBase}=require('./translation.cjs');
@@ -13,14 +15,16 @@ const assets=app.isPackaged?path.join(process.resourcesPath,'assets'):path.join(
 const baseDir=app.isPackaged?path.resolve(path.dirname(process.execPath),'..','..'):path.join(__dirname,'..');
 const dataDir=isTest?process.env.MEMREADER_TEST_DATA:path.join(baseDir,'data');
 app.setPath('userData',path.join(dataDir,'runtime'));
+if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
 const dictionary=new Dictionary(assets);
-let main;const speechService=new SpeechService(assets,dataDir);
+let main,progressSaveTimer;const speechService=new SpeechService(assets,dataDir);
+app.on('second-instance',()=>{if(main){if(main.isMinimized())main.restore();main.show();main.focus();}});
 const ui=(zh,en)=>store.state.settings.language==='en'?en:zh;
 function updateMenu(){
   Menu.setApplicationMenu(null);
 }
-function updateChrome(){const night=store.state.settings.theme==='night',colors={paper:'#f6f5f0',white:'#f6f7fb',sage:'#f0f5f3',night:'#171c26'};main?.setTitleBarOverlay({color:colors[store.state.settings.theme]||colors.white,symbolColor:night?'#e5e9f2':'#31394a',height:44});}
+function updateChrome(){const p=getPalette(store.state.settings);main?.setTitleBarOverlay({color:p.sidebar,symbolColor:p.text,height:44});}
 const formats=new Set(['pdf','epub','docx','txt','md','html','htm']);
 function getKey(){
   const p=path.join(dataDir,'api-key.bin');if(!fs.existsSync(p))return '';
@@ -49,7 +53,7 @@ async function generateSpeech(text,sid){
   return speechService.generate(text,sid);
 }
 app.whenReady().then(async()=>{
-  main=new BrowserWindow({width:1400,height:940,minWidth:1000,minHeight:720,title:'MemReader',backgroundColor:'#f6f7fb',show:!isTest,titleBarStyle:'hidden',titleBarOverlay:{color:'#f6f7fb',symbolColor:'#31394a',height:44},
+  main=new BrowserWindow({width:1400,height:940,minWidth:1000,minHeight:720,title:'VLM',backgroundColor:'#f6f7fb',show:!isTest,titleBarStyle:'hidden',titleBarOverlay:{color:'#f6f7fb',symbolColor:'#31394a',height:44},
     icon:path.join(assets,'icon.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   main.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   main.webContents.on('will-navigate',event=>event.preventDefault());
@@ -67,16 +71,32 @@ app.whenReady().then(async()=>{
     return {bytes:new Uint8Array(fs.readFileSync(p))};
   });
   handle('books:update',(id,patch)=>{const b=bookById(id);for(const key of ['title','location','progress','favorite','cover','pageCount'])if(key in patch)b[key]=patch[key];b.lastRead=new Date().toISOString();store.save();return b;});
-  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.save();return true;});
+  ipcMain.on('books:progress',(_event,id,patch)=>{
+    const b=store.state.books.find(book=>book.id===id);
+    if(!b||!patch||!Number.isFinite(patch.progress)||!(typeof patch.location==='string'||typeof patch.location==='number'&&Number.isFinite(patch.location)))return;
+    b.location=typeof patch.location==='string'?patch.location.slice(0,12000):patch.location;b.progress=Math.max(0,Math.min(1,patch.progress));b.lastRead=new Date().toISOString();
+    clearTimeout(progressSaveTimer);progressSaveTimer=setTimeout(()=>{try{store.save();}catch(error){main?.webContents.send('storage:error',error.message);}},600);
+  });
+  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.state.notebooks=store.state.notebooks.map(notebook=>({...notebook,bookIds:notebook.bookIds.filter(bookId=>bookId!==id)}));store.save();return true;});
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
+  handle('notebooks:create',input=>saveNotebook(store,input));
+  handle('notebooks:update',(id,input)=>saveNotebook(store,input,id));
+  handle('notebooks:delete',id=>deleteNotebook(store,id));
+  handle('notebooks:assign',(id,ids,remove)=>assignEntries(store,id,ids,remove));
   handle('entries:collect',async input=>{
     const text=normalize(input.text);let e=store.state.entries.find(e=>e.text.toLocaleLowerCase()===text.toLocaleLowerCase());
-    if(e){e.encounters++;if(input.context&&input.context!==e.context)e.contexts=[...e.contexts,{context:normalize(input.context),bookId:input.bookId,bookTitle:input.bookTitle,location:input.location}].slice(-50);store.save();return e;}
-    e=makeEntry(input);const found=await dictionary.lookup(text).catch(()=>null);
+    notebookIds(store.state,input);
+    if(!text||text.length>5000)throw Error('请选择有效的单词或句子');
+    const encounter=entry=>{entry.encounters++;collectMembership(store.state,entry,input);const context=normalize(input.context||'');if(context&&(context!==entry.context||input.bookId!==entry.bookId)&&!entry.contexts.some(item=>item.context===context&&item.bookId===input.bookId))entry.contexts=[...entry.contexts,{context,bookId:input.bookId,bookTitle:input.bookTitle,location:input.location}].slice(-50);store.save();return entry;};
+    if(e)return encounter(e);
+    const found=await dictionary.lookup(text).catch(()=>null);
+    // Another lookup can finish while the dictionary is loading. Recheck before insertion.
+    e=store.state.entries.find(entry=>entry.text.toLocaleLowerCase()===text.toLocaleLowerCase());if(e)return encounter(e);
+    e=makeEntry(input);
     if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
-    store.state.entries.unshift(e);store.save();return e;
+    collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();return e;
   });
-  handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());Object.assign(e,result,{updatedAt:new Date().toISOString()});store.save();return e;});
+  handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
   handle('selection:translate',(text,context)=>translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey()));
   handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
   handle('entries:delete',id=>{store.deleteEntries([id]);return true;});
@@ -94,11 +114,13 @@ app.whenReady().then(async()=>{
   handle('notes:delete',id=>{store.state.notes=store.state.notes.filter(n=>n.id!==id);store.save();});
   handle('settings:save',input=>{
     const updates={...input};
+    if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
+    if('colorThemes' in updates)updates.colorThemes=sanitizeColorThemes(updates.colorThemes,true);
     if('uiFontSize' in updates && (!Number.isInteger(updates.uiFontSize)||updates.uiFontSize<13||updates.uiFontSize>22))throw Error('界面字号需为 13–22px');
     if(updates.apiBase)updates.apiBase=validateBase(updates.apiBase);
     if('apiKey' in updates){const key=String(updates.apiKey).trim();if(key){if(!safeStorage.isEncryptionAvailable())throw Error('系统加密存储暂不可用');fs.writeFileSync(path.join(dataDir,'api-key.bin'),safeStorage.encryptString(key));}else{const p=path.join(dataDir,'api-key.bin');if(fs.existsSync(p))fs.unlinkSync(p);}delete updates.apiKey;}
     for(const key of Object.keys(DEFAULTS))if(key in updates && key!=='apiKeySet')store.state.settings[key]=updates[key];
-    store.save();if('language' in updates)updateMenu();if('theme' in updates)updateChrome();return {...store.state.settings,apiKeySet:!!getKey()};
+    store.save();if('language' in updates)updateMenu();if('theme' in updates||'colorThemes' in updates)updateChrome();return {...store.state.settings,apiKeySet:!!getKey()};
   });
   handle('settings:test-api',()=>translate('Learning builds lasting understanding.','',store.state.settings,getKey()));
   handle('speech:generate',generateSpeech);
@@ -109,19 +131,20 @@ app.whenReady().then(async()=>{
   handle('window:fullscreen',()=>{main.setFullScreen(!main.isFullScreen());return main.isFullScreen();});
   handle('window:print',()=>new Promise(resolve=>main.webContents.print({printBackground:true},(ok,reason)=>resolve({ok,reason}))));
   handle('data:open',()=>shell.openPath(dataDir));
-  handle('data:export',async type=>{
-    const csv=type==='csv';const result=await dialog.showSaveDialog(main,{defaultPath:'MemReader-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
-    if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(store.state.entries):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
+  handle('data:export',async(type,notebookId)=>{
+    const csv=type==='csv';if(csv&&notebookId&&notebookId!=='unfiled'&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
+    const entries=csv&&notebookId?store.state.entries.filter(entry=>notebookId==='unfiled'?!entry.notebookIds.length:entry.notebookIds.includes(notebookId)):store.state.entries;
+    const result=await dialog.showSaveDialog(main,{defaultPath:'VLM-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
+    if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(entries):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
   });
   handle('data:import',async()=>{
-    const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('MemReader JSON 备份','MemReader JSON backup'),extensions:['json']}]});if(result.canceled)return null;
-    const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 MemReader 备份');
-    let count=0;for(const e of imported.entries){if(typeof e.text!=='string'||!e.card||!e.card.due)continue;if(!store.state.entries.some(x=>x.text.toLocaleLowerCase()===e.text.toLocaleLowerCase())){store.state.entries.push({...makeEntry(e),...e,id:crypto.randomUUID()});count++;}}
-    store.save();return count;
+    const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('VLM JSON 备份','VLM JSON backup'),extensions:['json']}]});if(result.canceled)return null;
+    const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 VLM 备份');
+    return mergeBackup(store,imported);
   });
-  handle('data:backup',()=>{const p=path.join(dataDir,'backups','MemReader-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
+  handle('data:backup',()=>{const p=path.join(dataDir,'backups','VLM-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
   if(!store.state.books.length && fs.existsSync(path.join(assets,'欢迎阅读.html')))await importBooks([path.join(assets,'欢迎阅读.html')]);
   if(process.env.MEMREADER_DEV)await main.loadURL(process.env.MEMREADER_DEV);else await main.loadFile(path.join(__dirname,'..','dist','index.html'));
 });
 app.on('window-all-closed',()=>app.quit());
-app.on('before-quit',()=>{speechService.close();store.save();});
+app.on('before-quit',()=>{clearTimeout(progressSaveTimer);speechService.close();store.save();});

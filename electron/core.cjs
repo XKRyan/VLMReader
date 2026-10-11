@@ -24,7 +24,7 @@ function makeEntry(input, now = new Date()) {
     translation: input.translation || '', definition: input.definition || '', phonetic: input.phonetic || '', dictionaryWord: input.dictionaryWord || '',
     source: input.source || '', explanation:input.explanation||'',contextTranslation:input.contextTranslation||'',status: input.translation ? 'ready' : 'pending',
     createdAt: now.toISOString(), updatedAt: now.toISOString(), encounters: 1, contexts: [], note: '', suspended: false,
-    card: createEmptyCard(now), history: [] };
+    card: createEmptyCard(now), history: [], notebookIds:[] };
 }
 function csvEscape(s) { return '"' + String(s || '').replace(/"/g, '""') + '"'; }
 function vocabularyCsv(entries) {

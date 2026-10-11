@@ -7,4 +7,4 @@ import path from 'node:path';
 import localization from './scripts/i18n-plugin.mjs';
 const pdfRoot=path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
 const pdfAssets={name:'pdf-assets',closeBundle(){for(const folder of ['cmaps','standard_fonts','wasm'])cpSync(path.join(pdfRoot,folder),path.join('dist','pdf-assets',folder),{recursive:true});}};
-export default defineConfig({ plugins: [react({babel:{plugins:[localization]}}),pdfAssets], base: './', build: { chunkSizeWarningLimit: 1500 } });
+export default defineConfig({ plugins: [react({babel:{plugins:[localization]}}),pdfAssets], base: './', build: { chunkSizeWarningLimit: 1500,commonjsOptions:{include:[/node_modules/,/palette\.cjs$/]} } });

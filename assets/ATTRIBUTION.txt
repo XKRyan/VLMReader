@@ -1,4 +1,4 @@
-MemReader — third-party resources
+VLM — third-party resources
 
 ECDICT: https://github.com/skywind3000/ECDICT
 License: MIT (see ECDICT-LICENSE.txt). The complete imported entry is retained without abbreviation.

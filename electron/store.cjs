@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const DEFAULTS = { theme: 'paper', fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
+const {sanitizeColorThemes}=require('./palette.cjs');
+const DEFAULTS = { theme: 'paper', colorThemes:{}, fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
   autoSave: true, autoSaveSentences:false, preloadSpeech:true, hoverTranslate: false, rate: 1, enVoice: 0, zhVoice: 3, language:'zh', continuousRead:true,
   newPerDay: 20, reviewMode: 'meaning', sentenceReviewMode:'meaning', apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false };
 class Store {
@@ -8,7 +9,7 @@ class Store {
     this.dir = dir; fs.mkdirSync(dir, {recursive:true});
     for (const sub of ['books','backups','audio']) fs.mkdirSync(path.join(dir,sub),{recursive:true});
     this.file = path.join(dir,'library.json');
-    this.state = { version:1, books:[], entries:[], bookmarks:[], notes:[], settings:{...DEFAULTS}, stats:{minutes:0,reviews:[]} };
+    this.state = { version:1, books:[], entries:[], notebooks:[], bookmarks:[], notes:[], settings:{...DEFAULTS}, stats:{minutes:0,reviews:[]} };
     if (fs.existsSync(this.file)) {
       try { this.state = {...this.state,...JSON.parse(fs.readFileSync(this.file,'utf8'))}; }
       catch {
@@ -19,8 +20,12 @@ class Store {
       }
     }
     this.state.settings = {...DEFAULTS,...this.state.settings};
+    this.state.settings.colorThemes = sanitizeColorThemes(this.state.settings.colorThemes);
+    if(!Array.isArray(this.state.notebooks))this.state.notebooks=[];
+    for(const entry of this.state.entries)entry.notebookIds=[...new Set((Array.isArray(entry.notebookIds)?entry.notebookIds:[]).filter(id=>this.state.notebooks.some(book=>book.id===id)))];
     if (!Number.isInteger(this.state.settings.uiFontSize) || this.state.settings.uiFontSize < 13 || this.state.settings.uiFontSize > 22) this.state.settings.uiFontSize = DEFAULTS.uiFontSize;
   }
+  replaceState(next){const previous=this.state;this.state=next;try{this.save();}catch(error){this.state=previous;throw error;}}
   deleteEntries(ids) {
     if (!Array.isArray(ids) || ids.some(id => typeof id !== 'string' || !id)) throw Error('请选择要删除的条目');
     const targets = new Set(ids), entries = this.state.entries, reviews = this.state.stats.reviews;

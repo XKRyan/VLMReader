@@ -6,6 +6,7 @@ import ePub from 'epubjs';
 import DOMPurify from 'dompurify';
 import {marked} from 'marked';
 import {fontStack} from './fonts';
+import {getPalette} from '../electron/palette.cjs';
 import PdfDocument from './PdfDocument';
 import {sentenceFor,selectionFromDoc} from './selection';
 import {annotationRange,rangeAtPoint,selectionStart} from './annotations';
@@ -18,7 +19,7 @@ export default function Reader(props:Props) {
   const {book,settings,control,onMeta,onProgress,onSelection,onError,onTitle}=props;
   const mount=useRef<HTMLDivElement>(null), current=useRef(props);current.current=props;
   const [busy,setBusy]=useState(true),[html,setHtml]=useState(''),[pdfDoc,setPdfDoc]=useState<pdfjs.PDFDocumentProxy|null>(null);
-  const pdf=useRef<any>(null),epub=useRef<any>(null),rendition=useRef<any>(null),pendingScroll=useRef<number|null>(null);
+  const pdf=useRef<any>(null),epub=useRef<any>(null),rendition=useRef<any>(null),lastHover=useRef('');
   const container=useRef<HTMLDivElement>(null),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),initialLocation=useRef(book.location);
   const busyRef=useRef(busy);busyRef.current=busy;
   const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubHighlights=useRef(new Set<string>());
@@ -52,11 +53,11 @@ export default function Reader(props:Props) {
         if(metadata.title&&book.title!==metadata.title)onTitle(metadata.title);
         const navigation=await b.loaded.navigation;void b.locations.generate(1600).catch(()=>{});
         const r:any=b.renderTo(mount.current!,{width:'100%',height:'100%',flow:'paginated',spread:'none',allowScriptedContent:false});rendition.current=r;
-        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});});
+        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});contents.document.addEventListener('mousemove',(event:MouseEvent)=>hoverWord(contents.document,event.clientX,event.clientY,contents.document.body,range=>contents.cfiFromRange(range)));});
         r.on('selected',(cfi:string,contents:any)=>{const selection=selectionFromDoc(contents.document,contents.document.body.innerText,cfi,cfi);if(selection)current.current.onSelection(selection);});
         r.on('relocated',(loc:any)=>{if(!alive)return;current.current.onProgress(loc.start.cfi,b.locations.length()?b.locations.percentageFromCfi(loc.start.cfi):((loc.start.index||0)/Math.max(1,(b.spine as any).spineItems.length)));current.current.onMeta({index:loc.start.displayed.page,count:loc.start.displayed.total,toc:flattenToc(navigation.toc)});});
-        const colors=themeColors(settings.theme);
-        r.themes.default({'body':{'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'font-size':settings.fontSize+'px','line-height':String(settings.lineHeight),color:colors.text,background:colors.bg,padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accent},'::selection':{background:'#bfdbc6'}});
+        const colors=getPalette(current.current.settings);
+        r.themes.default({'body':{'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'font-size':settings.fontSize+'px','line-height':String(settings.lineHeight),color:colors.readingText,background:colors.paper,padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});
         r.themes.fontSize(settings.fontSize+'px');await r.display(book.location||undefined);
         if(!alive)return;
         control.current={prev:()=>r.prev(),next:()=>r.next(),go:where=>r.display(String(where)),getText:()=>r.getContents().map((c:any)=>c.document.body.innerText).join('\n'),
@@ -76,7 +77,7 @@ export default function Reader(props:Props) {
       }
       if(alive)setBusy(false);
     }).catch(error=>{if(alive){setBusy(false);onError('文档无法打开：'+error.message);}});
-    return()=>{alive=false;CSS.highlights.delete('memreader-notes');epubHighlights.current.clear();if(hoverTimer.current)clearTimeout(hoverTimer.current);if(pendingScroll.current)clearTimeout(pendingScroll.current);control.current=null;pdf.current?.destroy();pdf.current=null;rendition.current?.destroy();rendition.current=null;epub.current?.destroy();epub.current=null;};
+    return()=>{alive=false;CSS.highlights.delete('memreader-notes');epubHighlights.current.clear();if(hoverTimer.current)clearTimeout(hoverTimer.current);control.current=null;pdf.current?.destroy();pdf.current=null;rendition.current?.destroy();rendition.current=null;epub.current?.destroy();epub.current=null;};
   },[book.id]);
   useEffect(()=>{
     if(!html||!mount.current)return;
@@ -88,12 +89,13 @@ export default function Reader(props:Props) {
   },[html]);
   useEffect(()=>{markText();},[props.notes]);
   useEffect(()=>{
-    const r=rendition.current;if(!r)return;const colors=themeColors(settings.theme);
-    r.themes.default({'body':{color:colors.text,background:colors.bg,'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'line-height':String(settings.lineHeight),padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'}});r.themes.fontSize(settings.fontSize+'px');
-  },[settings.theme,settings.fontSize,settings.fontFamily,settings.readingFont,settings.lineHeight]);
+    const r=rendition.current;if(!r)return;const colors=getPalette(settings);
+    r.themes.default({'body':{color:colors.readingText,background:colors.paper,'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'line-height':String(settings.lineHeight),padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});r.themes.fontSize(settings.fontSize+'px');
+  },[settings.theme,settings.colorThemes,settings.fontSize,settings.fontFamily,settings.readingFont,settings.lineHeight]);
   useEffect(()=>{
-    const mountEl=mount.current;if(!mountEl||!props.speechText)return;
+    const mountEl=mount.current;if(!mountEl)return;
     for(const el of mountEl.querySelectorAll('.speaking'))el.classList.remove('speaking');
+    if(!props.speechText)return;
     const blocks=mountEl.querySelectorAll('p,li,h1,h2,h3,blockquote');const found=[...blocks].find(el=>el.textContent?.replace(/\s+/g,' ').includes(props.speechText));
     if(found){found.classList.add('speaking');found.scrollIntoView({behavior:'smooth',block:'center'});}
   },[props.speechText]);
@@ -102,22 +104,27 @@ export default function Reader(props:Props) {
     if(sel.isCollapsed){const id=rangeAtPoint(ranges.current,event.clientX,event.clientY),mark=current.current.notes.find(n=>n.id===id);if(mark)current.current.onAnnotation(mark);return;}
     const info=selectionFromDoc(document,mount.current?.innerText||'',container.current?.scrollTop||0);if(info)onSelection(info);
   }
-  function onMouseMove(e:React.MouseEvent){
-    if(!settings.hoverTranslate||book.format==='epub'||window.getSelection()?.toString())return;
+  function hoverWord(doc:Document,x:number,y:number,scope:Element,cfiFor?:(range:Range)=>string){
     if(hoverTimer.current)clearTimeout(hoverTimer.current);
-    const x=e.clientX,y=e.clientY;
+    if(!current.current.settings.hoverTranslate||doc.getSelection()?.toString())return;
     hoverTimer.current=setTimeout(()=>{
-      const caret=(document as any).caretRangeFromPoint(x,y) as Range|null;if(!caret||caret.startContainer.nodeType!==3||!mount.current?.contains(caret.startContainer))return;
+      if(!current.current.settings.hoverTranslate)return;
+      const caret=(doc as any).caretRangeFromPoint(x,y) as Range|null;if(!caret||caret.startContainer.nodeType!==3||!scope.contains(caret.startContainer))return;
       const text=caret.startContainer.textContent||'',offset=caret.startOffset;const seg=new Intl.Segmenter(/[\u3400-\u9fff]/.test(text)?'zh':'en',{granularity:'word'});
       const word=[...seg.segment(text)].find(s=>s.isWordLike&&offset>=s.index&&offset<s.index+s.segment.length);if(!word)return;
-      const context=sentenceFor(caret.startContainer.parentElement?.closest('p,li')?.textContent||text,word.segment);
-      onSelection({text:word.segment,context,location:book.format==='pdf'?Number(caret.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage)||1:container.current?.scrollTop||0,kind:'word'});
+      const range=doc.createRange();range.setStart(caret.startContainer,word.index);range.setEnd(caret.startContainer,word.index+word.segment.length);
+      const root=caret.startContainer.parentElement?.closest('[data-annotation-root],.textLayer,.prose')||(cfiFor?scope:null);if(!root)return;
+      const anchor=selectionStart(root,range),contextRoot=caret.startContainer.parentElement?.closest('p,li')||root,contextAnchor=selectionStart(contextRoot,range);
+      const context=sentenceFor(contextAnchor.text,word.segment,contextAnchor.start);
+      const cfi=cfiFor?.(range),location=cfi||(book.format==='pdf'?Number(caret.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage)||1:container.current?.scrollTop||0),key=[location,anchor.start,word.segment,context].join('|');
+      if(lastHover.current===key)return;lastHover.current=key;
+      current.current.onSelection({text:word.segment,context,start:anchor.start,location,cfi,kind:'word'});
     },700);
   }
-  function onScroll(){if(book.format==='epub'||book.format==='pdf')return;if(pendingScroll.current)clearTimeout(pendingScroll.current);pendingScroll.current=window.setTimeout(()=>{const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));},600);}
+  function onMouseMove(e:React.MouseEvent){if(book.format!=='epub'&&container.current)hoverWord(document,e.clientX,e.clientY,container.current);}
+  function onScroll(){if(book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
   return <div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
     {busy&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
     {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
   </div>;
 }
-function themeColors(theme:Settings['theme']){return theme==='night'?{bg:'#202722',text:'#d9e1d8',accent:'#abc5aa'}:theme==='sage'?{bg:'#eef3e9',text:'#29392b',accent:'#477054'}:theme==='white'?{bg:'#ffffff',text:'#252d28',accent:'#477054'}:{bg:'#fcfaf4',text:'#30372d',accent:'#477054'};}

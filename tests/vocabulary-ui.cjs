@@ -32,6 +32,7 @@ function near(value,expected){assert.ok(Math.abs(parseFloat(value)-expected)<0.0
     await page.screenshot({path:path.join(shots,'10-large-interface-settings.png')});
     await size.selectOption('20');await page.waitForFunction(()=>getComputedStyle(document.querySelector('.nav-item')).fontSize==='20px');
     await page.getByRole('button',{name:/^生词本/}).first().click();
+    assert.equal(await page.getByRole('checkbox',{name:'全选当前列表',exact:true}).count(),0);await page.getByRole('button',{name:'管理',exact:true}).click();
     const all=page.getByRole('checkbox',{name:'全选当前列表',exact:true}),bulk=page.getByRole('button',{name:'删除所选',exact:true});
     assert.ok(await bulk.isDisabled());await page.getByRole('checkbox',{name:'选择 resilient',exact:true}).check();
     assert.equal(await page.locator('.vocab-detail').count(),0,'Checkbox must not open entry details');
@@ -59,7 +60,7 @@ function near(value,expected){assert.ok(Math.abs(parseFloat(value)-expected)<0.0
     await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'确认删除',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
     assert.equal(await page.locator('.vocab-detail').count(),0);assert.equal((await page.evaluate(()=>window.mem.boot())).entries[0].id,items[2].id);
     await page.getByRole('button',{name:'偏好设置',exact:true}).click();await page.getByRole('combobox',{name:'界面语言',exact:true}).selectOption('en');
-    assert.ok(await page.getByRole('combobox',{name:'Interface text size',exact:true}).isVisible());await page.getByRole('button',{name:/^Vocabulary/}).first().click();
+    assert.ok(await page.getByRole('combobox',{name:'Interface text size',exact:true}).isVisible());await page.getByRole('button',{name:/^Vocabulary/}).first().click();await page.getByRole('button',{name:'Manage',exact:true}).click();
     await page.getByRole('checkbox',{name:'Select all in this list',exact:true}).check();await page.getByRole('button',{name:'Delete selected',exact:true}).click();
     assert.ok(await page.getByRole('dialog',{name:'Delete this entry?',exact:true}).isVisible());await page.getByRole('button',{name:'Cancel',exact:true}).click();
     await app.close();app=await launch();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));

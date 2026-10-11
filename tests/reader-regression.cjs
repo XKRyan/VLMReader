@@ -1,5 +1,5 @@
 process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
-const {_electron:electron}=require('@playwright/test');
+const {_electron:electron,expect}=require('@playwright/test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'..'),profile=path.join(__dirname,'regression-data-'+Date.now());
 async function pdfWord(filename,word){
@@ -30,7 +30,7 @@ async function pdfWord(filename,word){
     }
     for(const zoom of ['1','0.7','1.2']){
       await page.locator('.pdf-zoom input').evaluate((input,value)=>{const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));},zoom);
-      await page.waitForFunction(async zoom=>{const canvas=document.querySelector('.pdf-page canvas'),surface=document.querySelector('.reader-surface');if(!canvas||!surface||document.querySelector('.reader-loading')||!document.querySelector('.textLayer span'))return false;const settings=(await window.mem.boot()).settings;return Math.abs(canvas.getBoundingClientRect().width-Math.min(surface.clientWidth-64,settings.contentWidth+180)*Number(zoom))<1;},zoom);await selectVisibleWord();
+      await expect.poll(()=>page.evaluate(async zoom=>{const canvas=document.querySelector('.pdf-page canvas'),surface=document.querySelector('.reader-surface');if(!canvas||!surface||document.querySelector('.reader-loading')||!document.querySelector('.textLayer span'))return false;const settings=(await window.mem.boot()).settings;return Math.abs(canvas.getBoundingClientRect().width-Math.min(surface.clientWidth-64,settings.contentWidth+180)*Number(zoom))<1;},zoom)).toBe(true);await selectVisibleWord();
     }
     await page.screenshot({path:path.join(__dirname,'screenshots/08-selection-alignment.png')});
     console.log('Real mouse selection matches visible Courier PDF text at three zoom levels; DPR',await page.evaluate(()=>devicePixelRatio));
@@ -59,13 +59,13 @@ async function pdfWord(filename,word){
     await page.getByRole('button',{name:'返回书架',exact:true}).click();
     const sentence=await page.evaluate(()=>window.mem.collect({text:'A resilient learner keeps trying.',context:'A resilient learner keeps trying.',kind:'sentence',location:1,bookId:'',bookTitle:'Regression',translation:'有韧性的学习者会不断尝试。'}));
     await page.reload();await page.getByRole('button',{name:/^生词本/}).first().click();await page.locator('.vocab-row').filter({hasText:'A resilient learner keeps trying.'}).first().click();
-    await page.getByRole('combobox',{name:'句子填空目标',exact:true}).fill('keeps trying');await page.locator('.vocab-detail .panel-heading').click();await page.waitForFunction(async id=>(await window.mem.boot()).entries.find(e=>e.id===id)?.reviewTarget==='keeps trying',sentence.id);
+    await page.getByRole('combobox',{name:'句子填空目标',exact:true}).fill('keeps trying');await page.locator('.vocab-detail .panel-heading').click();await expect.poll(()=>page.evaluate(async id=>(await window.mem.boot()).entries.find(e=>e.id===id)?.reviewTarget,sentence.id)).toBe('keeps trying');
     await assert.rejects(()=>page.evaluate(id=>window.mem.updateEntry(id,{reviewTarget:'not part of this sentence'}),sentence.id),/原句/);
     await page.getByRole('button',{name:'去复习',exact:true}).click();await page.getByRole('combobox',{name:'复习内容',exact:true}).selectOption('sentence');await page.getByRole('button',{name:'关键词填空',exact:true}).click();
     assert.equal(await page.locator('.cloze-text').innerText(),'A resilient learner ______ .');await page.getByRole('textbox',{name:'填空答案',exact:true}).fill('keeps trying');await page.getByRole('textbox',{name:'填空答案',exact:true}).press('Enter');await page.getByText('答案正确',{exact:false}).waitFor();await page.locator('.ratings .good').click();await page.locator('.review-complete').waitFor();
     assert.equal((await page.evaluate(()=>window.mem.boot())).entries.find(e=>e.id===sentence.id).card.reps,1);
-    await page.getByRole('button',{name:'查看生词本',exact:true}).click();const row=page.locator('.vocab-row').filter({hasText:'A resilient learner keeps trying.'}).first();await row.getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();assert.ok((await page.evaluate(()=>window.mem.boot())).entries.some(e=>e.id===sentence.id));
-    await row.click();assert.ok(await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).isVisible());await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'确认删除',exact:true}).click();await page.waitForFunction(async id=>!(await window.mem.boot()).entries.some(e=>e.id===id),sentence.id);
+    await page.getByRole('button',{name:'查看生词本',exact:true}).click();await page.getByRole('button',{name:'管理',exact:true}).click();const row=page.locator('.vocab-row').filter({hasText:'A resilient learner keeps trying.'}).first();await row.getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'取消',exact:true}).click();assert.ok((await page.evaluate(()=>window.mem.boot())).entries.some(e=>e.id===sentence.id));
+    await row.click();assert.ok(await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).isVisible());await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'确认删除',exact:true}).click();await expect.poll(()=>page.evaluate(async id=>(await window.mem.boot()).entries.some(e=>e.id===id),sentence.id)).toBe(false);
     const remaining=await page.evaluate(()=>window.mem.boot());assert.ok(remaining.entries.some(e=>e.text==='perfectly'));assert.ok(!remaining.stats.reviews.some(r=>r.entryId===sentence.id));
     console.log('Sentence keyword recall, FSRS scoring, deletion cancellation and complete record deletion passed');
     await page.getByRole('button',{name:'偏好设置',exact:true}).click();await page.getByRole('combobox',{name:'界面语言',exact:true}).selectOption('en');assert.ok(await page.getByRole('combobox',{name:'Default sentence exercise',exact:true}).isVisible());

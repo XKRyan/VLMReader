@@ -2,6 +2,9 @@ const {contextBridge,ipcRenderer,webUtils}=require('electron');
 const invoke=channel=>(...args)=>ipcRenderer.invoke(channel,...args);
 contextBridge.exposeInMainWorld('mem',{
   boot:invoke('boot'), importBooks:invoke('books:import'), readBook:invoke('books:read'), updateBook:invoke('books:update'), deleteBook:invoke('books:delete'),
+  reportProgress:(id,patch)=>ipcRenderer.send('books:progress',id,patch),
+  createNotebook:invoke('notebooks:create'),updateNotebook:invoke('notebooks:update'),deleteNotebook:invoke('notebooks:delete'),assignNotebook:invoke('notebooks:assign'),
+  onStorageError:fn=>{const listener=(_event,message)=>fn(message);ipcRenderer.on('storage:error',listener);return()=>ipcRenderer.removeListener('storage:error',listener);},
   lookup:invoke('dictionary:lookup'), collect:invoke('entries:collect'), translate:invoke('entries:translate'), translateSelection:invoke('selection:translate'), updateEntry:invoke('entries:update'), deleteEntry:invoke('entries:delete'), deleteEntries:invoke('entries:delete-many'),
   review:invoke('entries:review'), undoReview:invoke('entries:undo'), intervals:invoke('entries:intervals'),
   bookmark:invoke('bookmarks:add'), deleteBookmark:invoke('bookmarks:delete'), note:invoke('notes:add'), updateNote:invoke('notes:update'), deleteNote:invoke('notes:delete'),

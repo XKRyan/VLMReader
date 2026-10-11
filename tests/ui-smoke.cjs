@@ -1,5 +1,5 @@
 process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
-const {_electron:electron}=require('@playwright/test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const http=require('node:http');
+const {_electron:electron,expect}=require('@playwright/test');const assert=require('node:assert/strict');const fs=require('node:fs');const path=require('node:path');const http=require('node:http');
 const root=path.resolve(__dirname,'..');const profile=path.join(__dirname,'runtime-data-'+Date.now());const shots=path.join(__dirname,'screenshots');fs.mkdirSync(shots,{recursive:true});
 (async()=>{
  const launchEnv={...process.env,MEMREADER_TEST:'1',MEMREADER_TEST_DATA:profile};delete launchEnv.ELECTRON_RUN_AS_NODE;
@@ -15,7 +15,7 @@ const root=path.resolve(__dirname,'..');const profile=path.join(__dirname,'runti
   await page.locator('.definition-block').waitFor();assert.ok((await page.locator('.definition-block').innerText()).length>5);
   const state=await page.evaluate(()=>window.mem.boot());assert.equal(state.entries.length,1);assert.ok(state.entries[0].context.includes('resilient'));assert.ok(state.entries[0].definition);
   await page.screenshot({path:path.join(shots,'02-reading.png')});console.log('Selection, offline definition and original sentence saved');
-  await page.getByRole('button',{name:'将整句加入生词本'}).click();await page.waitForFunction(async()=>{const s=await window.mem.boot();return s.entries.length===2;});
+  await page.getByRole('button',{name:'将整句加入生词本'}).click();await expect.poll(()=>page.evaluate(async()=>(await window.mem.boot()).entries.length)).toBe(2);
   await page.locator('.translation-content').getByRole('button',{name:'添加批注',exact:true}).click();await page.getByRole('textbox',{name:'批注内容'}).fill('Remember this example.');await page.getByRole('button',{name:'保存批注',exact:true}).click();await page.getByRole('button',{name:'添加书签',exact:true}).click();
   await page.getByRole('button',{name:'返回书架',exact:true}).click();
   const paths=['Learning.pdf','Learning.docx','Learning.epub'].map(f=>path.join(__dirname,'fixtures',f));

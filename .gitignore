@@ -20,3 +20,5 @@ assets/MemReader-v02.ico
 tests/*/
 !tests/fixtures/
 tests/fixtures/*.wav
+
+assets/*-v*.ico
