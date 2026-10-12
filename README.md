@@ -4,6 +4,8 @@ Windows 阅读器：本地文档、离线词典、双语朗读、批注与间隔
 
 ## 启动
 
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.0-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
 ## 使用
