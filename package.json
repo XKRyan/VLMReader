@@ -1,6 +1,6 @@
 {
   "name": "vlm-reader",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "VLM — 阅读、理解与记忆",
   "author": "VLM",
   "private": true,
@@ -15,8 +15,10 @@
   "dependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@fontsource/inter": "^5.2.8",
+    "@xmldom/xmldom": "0.8.15",
     "dompurify": "^3.3.0",
     "epubjs": "^0.3.93",
+    "jszip": "3.10.2",
     "lucide-react": "^0.468.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.0",

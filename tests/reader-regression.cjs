@@ -24,7 +24,12 @@ async function pdfWord(filename,word){
       const surface=await page.locator('.reader-surface').boundingBox();
       await page.locator('.reader-surface').evaluate((el,offset)=>{el.scrollTop+=offset.y;el.scrollLeft+=offset.x;},{x:Math.max(0,x-(surface.x+surface.width-60)),y:Math.max(0,y-(surface.y+surface.height-50))});
       box=await page.locator('[data-pdf-page="1"] canvas').boundingBox();x=box.x+word.x*box.width/word.width;y=box.y+(word.height-word.y)*box.height/word.height;
+      await page.locator('[data-pdf-page="1"] .textLayer span').first().waitFor();
       await page.evaluate(()=>getSelection()?.removeAllRanges());await page.mouse.dblclick(x,y);
+      if(!(await page.evaluate(()=>getSelection()?.toString())).trim()){
+        await page.screenshot({path:path.join(__dirname,'screenshots/pdf-selection-failure.png'),timeout:10000});
+        console.log('PDF selection diagnostic',await page.evaluate(({x,y})=>{const caret=document.caretRangeFromPoint(x,y),layer=document.querySelector('[data-pdf-page="1"] .textLayer');return {x,y,caretText:caret?.startContainer?.textContent?.slice(0,180),offset:caret?.startOffset,layerText:layer?.textContent?.slice(0,180),target:document.elementFromPoint(x,y)?.outerHTML?.slice(0,300)};},{x,y}));
+      }
       assert.equal((await page.evaluate(()=>getSelection()?.toString())).trim(),'perfectly','Visible PDF glyphs and selection must agree');
       await page.locator('.translation-panel .entry-head h2').filter({hasText:/^perfectly$/}).waitFor();
     }

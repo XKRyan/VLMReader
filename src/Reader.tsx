@@ -3,7 +3,7 @@ import * as pdfjs from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import ePub from 'epubjs';
-import DOMPurify from 'dompurify';
+import {documentHtml} from './documentHtml';
 import {marked} from 'marked';
 import {fontStack} from './fonts';
 import {getPalette} from '../electron/palette.cjs';
@@ -70,7 +70,7 @@ export default function Reader(props:Props) {
         let value=data.html||data.text||'';
         if(book.format==='txt')value=value.split(/\n\s*\n/).map(t=>'<p>'+t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')+'</p>').join('');
         if(book.format==='md')value=await marked(value);
-        const clean=DOMPurify.sanitize(value,{FORBID_TAGS:['style','iframe','form','input','button','script','link','meta'],FORBID_ATTR:['style','srcset']});
+        const clean=documentHtml(value,data.resources);
         setHtml(clean);
         control.current={prev:()=>container.current?.scrollBy({top:-500,behavior:'smooth'}),next:()=>container.current?.scrollBy({top:500,behavior:'smooth'}),go:textGo,getText:()=>mount.current?.innerText||'',nextText:async()=>null,highlight:markText,locate,
           search:async q=>{const text=mount.current?.innerText||'';const hits:SearchHit[]=[];let at=0;while(q && (at=text.toLocaleLowerCase().indexOf(q.toLocaleLowerCase(),at))>=0&&hits.length<80){const proportion=at/Math.max(1,text.length);hits.push({label:'匹配 '+(hits.length+1),location:proportion*Math.max(0,(container.current?.scrollHeight||0)-(container.current?.clientHeight||0)),excerpt:text.slice(Math.max(0,at-60),at+140)});at+=q.length;}return hits;}};

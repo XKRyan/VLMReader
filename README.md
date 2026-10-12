@@ -9,6 +9,7 @@ Windows 阅读器：本地文档、离线词典、双语朗读、批注与间隔
 ## 使用
 
 - 导入 PDF、EPUB、DOCX、TXT、Markdown 或 HTML；支持拖入文件、搜索、目录、阅读进度、收藏、书签与打印。PDF 原版和文字模式均连续滚动，各页自然衔接，跨页不会跳到页首；EPUB 支持滚轮翻页。
+- DOCX 保留原有荧光笔颜色、文字颜色、文字底纹、粗体、斜体、下划线、表格和嵌入图片；支持段落 / 字符样式继承及主题色。已经导入的 DOCX 直接打开即可使用，无需重新导入，也不会改动源文件。HTML / Markdown 保留文字颜色、标注及图片，导入时将同目录及子目录内引用的图片一起保存；已有 HTML / Markdown 可重新导入同一文件补全图片，不会重复建书。EPUB 与原版 PDF 保留其原始颜色和图片；PDF 文字模式仍只重排文字。
 - 鼠标选中词或句子，右侧显示译文。单词默认保存释义与原句；句子默认不自动加入生词本，仍可翻译、批注或手动保存。自动收集句子和悬停查词可在设置中开启。
 - 选中文字后点击“添加批注”，保存高亮和自己的理解。批注侧栏支持定位原文、编辑与删除；跨重启保留，删除不改动文档内容。
 - 英汉查询使用 ECDICT，汉英查询使用 CC-CEDICT；保留完整词条与英文释义。专业词、短语或词典未收录的内容可使用 API。
@@ -49,7 +50,7 @@ pnpm package
 
 资源准备只需首次执行，之后复用本地文件。打包后自动校验并恢复官方 Electron 运行时字节，窗口与快捷方式使用独立应用图标。Rollup 使用官方 WASM 包，兼容限制原生构建模块的 Windows 应用控制策略。
 
-运行 `pnpm test` 检查词典、资料持久化、FSRS、翻译与持久语音缓存；`node tests/appearance-notebooks-ui.cjs` 验证配色、词本关联、分组导出与复习、悬停查词、固定界面及重启保存；`node tests/vocabulary-ui.cjs` 验证批量删除和字号，`node tests/annotations-ui.cjs` 验证手动词典添加、批注与句子默认不收集，`node tests/ui-smoke.cjs` 验证桌面功能，`node tests/reader-regression.cjs` 验证真实鼠标取词、字体与连续滚动，`node tests/speech-continuity.cjs` 验证连续音轨、停止重启、倍速和实际应用重启后的缓存复用。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py` 生成（需要 reportlab 与 python-docx）。
+运行 `pnpm test` 检查词典、资料持久化、FSRS、翻译、文档格式与持久语音缓存；`node tests/document-formatting-ui.cjs` 验证文档标注、文字颜色、图片、表格、字体与跨重启显示；`node tests/appearance-notebooks-ui.cjs` 验证配色、词本关联、分组导出与复习、悬停查词、固定界面及重启保存；`node tests/vocabulary-ui.cjs` 验证批量删除和字号，`node tests/annotations-ui.cjs` 验证手动词典添加、批注与句子默认不收集，`node tests/ui-smoke.cjs` 验证桌面功能，`node tests/reader-regression.cjs` 验证真实鼠标取词、字体与连续滚动，`node tests/speech-continuity.cjs` 验证连续音轨、停止重启、倍速和实际应用重启后的缓存复用。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py` 或 `scripts/create_formatting_fixtures.py` 生成（需要 reportlab、python-docx 和 Pillow）。
 
 ## 许可与公开发布
 

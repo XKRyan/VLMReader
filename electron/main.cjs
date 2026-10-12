@@ -9,6 +9,8 @@ const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,m
 const {Dictionary}=require('./dictionary.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,vocabularyCsv}=require('./core.cjs');
 const {translate,validateBase}=require('./translation.cjs');
+const {convertDocx}=require('./docx.cjs');
+const {readText,copyImages,imageResources}=require('./document-files.cjs');
 const isTest=process.env.MEMREADER_TEST==='1';
 if(process.platform==='win32')app.setAppUserModelId('study.memreader.desktop');
 const assets=app.isPackaged?path.join(process.resourcesPath,'assets'):path.join(__dirname,'..','assets');
@@ -42,8 +44,9 @@ async function importBooks(paths){
     const ext=path.extname(filename).slice(1).toLowerCase();if(!formats.has(ext))continue;
     const info=fs.statSync(filename);if(!info.isFile()||info.size>300*1024*1024)throw Error('文档过大（上限 300 MB）：'+path.basename(filename));
     const hash=crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-    const existing=store.state.books.find(b=>b.hash===hash);if(existing){added.push(existing);continue;}
+    const existing=store.state.books.find(b=>b.hash===hash);if(existing){if(['md','html','htm'].includes(ext))copyImages(filename,path.join(dataDir,'books',existing.id+'-assets'));added.push(existing);continue;}
     const id=crypto.randomUUID();const dest=path.join(dataDir,'books',id+'.'+ext);fs.copyFileSync(filename,dest);
+    if(['md','html','htm'].includes(ext))copyImages(filename,path.join(dataDir,'books',id+'-assets'));
     const book={id,hash,format:ext,title:path.basename(filename,path.extname(filename)),size:info.size,createdAt:new Date().toISOString(),lastRead:null,progress:0,location:null,favorite:false};
     store.state.books.unshift(book);added.push(book);
   }
@@ -66,8 +69,8 @@ app.whenReady().then(async()=>{
   handle('books:read',async id=>{
     const b=bookById(id);b.lastRead=new Date().toISOString();store.save();
     const p=path.join(dataDir,'books',b.id+'.'+b.format);
-    if(b.format==='docx'){const mammoth=require('mammoth');const result=await mammoth.convertToHtml({path:p});return {html:result.value,warnings:result.messages.map(m=>m.message)};}
-    if(['txt','md','html','htm'].includes(b.format)){const bytes=fs.readFileSync(p);let text;if(bytes[0]===255&&bytes[1]===254)text=bytes.subarray(2).toString('utf16le');else if(bytes[0]===254&&bytes[1]===255)text=Buffer.from(bytes.subarray(2)).swap16().toString('utf16le');else{try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch{text=new TextDecoder('gb18030').decode(bytes);}}return {text};}
+    if(b.format==='docx')return convertDocx(p);
+    if(['txt','md','html','htm'].includes(b.format))return {text:readText(p),resources:imageResources(path.join(dataDir,'books',b.id+'-assets'))};
     return {bytes:new Uint8Array(fs.readFileSync(p))};
   });
   handle('books:update',(id,patch)=>{const b=bookById(id);for(const key of ['title','location','progress','favorite','cover','pageCount'])if(key in patch)b[key]=patch[key];b.lastRead=new Date().toISOString();store.save();return b;});
@@ -77,7 +80,7 @@ app.whenReady().then(async()=>{
     b.location=typeof patch.location==='string'?patch.location.slice(0,12000):patch.location;b.progress=Math.max(0,Math.min(1,patch.progress));b.lastRead=new Date().toISOString();
     clearTimeout(progressSaveTimer);progressSaveTimer=setTimeout(()=>{try{store.save();}catch(error){main?.webContents.send('storage:error',error.message);}},600);
   });
-  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.state.notebooks=store.state.notebooks.map(notebook=>({...notebook,bookIds:notebook.bookIds.filter(bookId=>bookId!==id)}));store.save();return true;});
+  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);const images=path.resolve(dataDir,'books',b.id+'-assets');if(images.startsWith(path.resolve(dataDir,'books')+path.sep)&&fs.existsSync(images))fs.rmSync(images,{recursive:true});store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.state.notebooks=store.state.notebooks.map(notebook=>({...notebook,bookIds:notebook.bookIds.filter(bookId=>bookId!==id)}));store.save();return true;});
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
   handle('notebooks:create',input=>saveNotebook(store,input));
   handle('notebooks:update',(id,input)=>saveNotebook(store,input,id));
