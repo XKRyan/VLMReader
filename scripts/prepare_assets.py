@@ -9,7 +9,7 @@ def download(url, name):
     if p.exists() and p.stat().st_size > 100: return p
     tmp = p.with_suffix(p.suffix + '.part')
     print('Downloading', name, flush=True)
-    req = urllib.request.Request(url, headers={'User-Agent': 'MemReader/0.1'})
+    req = urllib.request.Request(url, headers={'User-Agent': 'VLMReader/0.5.1'})
     for attempt in range(3):
         try:
             with urllib.request.urlopen(req, timeout=90) as resp, tmp.open('wb') as out:

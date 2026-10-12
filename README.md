@@ -2,9 +2,17 @@
 
 Windows 阅读器：本地文档、离线词典、双语朗读、批注与间隔复习。支持简体中文 / English。
 
+## 读懂，记住，再遇见
+
+VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF、DOCX、EPUB 等常见格式。划词即可查询离线中英词典，生词连同释义和原句保存；句子与语境翻译可接入 DeepSeek API。配合双语离线朗读、批注、词本分区和 FSRS 间隔复习，让阅读中遇见的知识慢慢留下来。字体、字号和配色自由调整，文档与学习记录保存在本机。
+
+![阅读：保留图片与标注，自由调整字体与配色](docs/images/01-reading.png)
+![划词：查询离线词典，保存释义与原句](docs/images/02-translation.png)
+![复习：主动回忆与 FSRS 间隔复习](docs/images/03-review.png)
+
 ## 启动
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.0-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.1-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 

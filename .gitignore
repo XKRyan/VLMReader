@@ -16,7 +16,7 @@ assets/kokoro-multi-lang-v1_1/
 assets/dictionary.sqlite
 assets/dictionary.building
 assets/icon-preview.svg
-assets/MemReader-v02.ico
+assets/VLMReader-v02.ico
 tests/*/
 !tests/fixtures/
 tests/fixtures/*.wav
