@@ -152,6 +152,13 @@ if not cache.exists() or not cache_manifest.exists() or cache_manifest.read_text
 add('Media',[(1,cab.index,None,'#payload.cab',None,None)])
 msilib.add_stream(db,'payload.cab',str(cache))
 db.Commit()
+# Windows Installer may compact the database when its last handle closes.
+# Release every object that retains the database before computing the public hash.
+msilib.current_feature=None
+directory_map.clear()
+for database_owner in ('db','summary','feature','target','appdir','release_dir','runtime_dir','directory','owner','welcome','choose','install','finish','progress','bar','fail'):
+    globals()[database_owner]=None
+gc.collect()
 manifest={'file':output.name,'bytes':output.stat().st_size,'sha256':hashlib.file_digest(output.open('rb'),'sha256').hexdigest(),'productCode':product_code,'programFiles':len(files),'customExecutableActions':False}
 (root/'publication/installer-msi-manifest.json').write_text(json.dumps(manifest,indent=2),encoding='utf-8')
 print(json.dumps(manifest),flush=True)
