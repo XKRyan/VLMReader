@@ -16,6 +16,10 @@ html,body,#root{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 .primary:hover{box-shadow:none}
 .context-block blockquote,.annotation-editor blockquote,.note-quote{border-color:var(--accent)}
 .prose .speaking,.pdf-text-document .speaking{background:var(--selection)}
+.brand{font-size:18px;gap:8px;white-space:nowrap}
+.pdf-reflow-figure{margin:1.1em auto 1.4em;max-width:100%;overflow:hidden;background:white;flex:none;line-height:0}
+.pdf-reflow-figure img{display:block;width:100%;height:auto;max-width:100%;margin:0}
+.pdf-source-highlight{box-decoration-break:clone;-webkit-box-decoration-break:clone;border-radius:2px}
 
 .color-settings{margin-top:18px;border:1px solid var(--line);border-radius:9px;overflow:hidden}
 .color-settings-toggle{display:flex;align-items:center;gap:10px;padding:12px 14px;width:100%;text-align:left;color:var(--text);font-size:calc(11px * var(--ui-scale))}

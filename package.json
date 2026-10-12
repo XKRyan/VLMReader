@@ -1,8 +1,8 @@
 {
   "name": "vlm-reader",
-  "version": "0.4.1",
-  "description": "VLM — 阅读、理解与记忆",
-  "author": "VLM",
+  "version": "0.5.0",
+  "description": "VLMReader — 阅读、理解与记忆",
+  "author": "VLMReader",
   "private": true,
   "main": "electron/main.cjs",
   "scripts": {
@@ -42,7 +42,7 @@
   },
   "build": {
     "appId": "study.memreader.desktop",
-    "productName": "VLM",
+    "productName": "VLMReader",
     "directories": {
       "output": "release"
     },

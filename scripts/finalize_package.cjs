@@ -11,4 +11,4 @@ fs.copyFileSync(upstream,executable);
 const digest=file=>crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
 if(digest(upstream)!==digest(executable))throw Error('Runtime verification failed.');
 fs.copyFileSync(path.join(root,'README.md'),path.join(output,'使用说明.md'));
-console.log('VLM packaged with the verified, unmodified official Electron runtime.');
+console.log('VLMReader packaged with the verified, unmodified official Electron runtime.');

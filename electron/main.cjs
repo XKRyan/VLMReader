@@ -56,7 +56,7 @@ async function generateSpeech(text,sid){
   return speechService.generate(text,sid);
 }
 app.whenReady().then(async()=>{
-  main=new BrowserWindow({width:1400,height:940,minWidth:1000,minHeight:720,title:'VLM',backgroundColor:'#f6f7fb',show:!isTest,titleBarStyle:'hidden',titleBarOverlay:{color:'#f6f7fb',symbolColor:'#31394a',height:44},
+  main=new BrowserWindow({width:1400,height:940,minWidth:1000,minHeight:720,title:'VLMReader',backgroundColor:'#f6f7fb',show:!isTest,titleBarStyle:'hidden',titleBarOverlay:{color:'#f6f7fb',symbolColor:'#31394a',height:44},
     icon:path.join(assets,'icon.ico'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   main.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   main.webContents.on('will-navigate',event=>event.preventDefault());
@@ -137,15 +137,15 @@ app.whenReady().then(async()=>{
   handle('data:export',async(type,notebookId)=>{
     const csv=type==='csv';if(csv&&notebookId&&notebookId!=='unfiled'&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
     const entries=csv&&notebookId?store.state.entries.filter(entry=>notebookId==='unfiled'?!entry.notebookIds.length:entry.notebookIds.includes(notebookId)):store.state.entries;
-    const result=await dialog.showSaveDialog(main,{defaultPath:'VLM-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
+    const result=await dialog.showSaveDialog(main,{defaultPath:'VLMReader-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
     if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(entries):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
   });
   handle('data:import',async()=>{
-    const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('VLM JSON 备份','VLM JSON backup'),extensions:['json']}]});if(result.canceled)return null;
-    const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 VLM 备份');
+    const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('VLMReader JSON 备份','VLMReader JSON backup'),extensions:['json']}]});if(result.canceled)return null;
+    const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 VLMReader 备份');
     return mergeBackup(store,imported);
   });
-  handle('data:backup',()=>{const p=path.join(dataDir,'backups','VLM-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
+  handle('data:backup',()=>{const p=path.join(dataDir,'backups','VLMReader-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
   if(!store.state.books.length && fs.existsSync(path.join(assets,'欢迎阅读.html')))await importBooks([path.join(assets,'欢迎阅读.html')]);
   if(process.env.MEMREADER_DEV)await main.loadURL(process.env.MEMREADER_DEV);else await main.loadFile(path.join(__dirname,'..','dist','index.html'));
 });

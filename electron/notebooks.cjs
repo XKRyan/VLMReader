@@ -30,7 +30,7 @@ function assignEntries(store,id,ids,remove=false){
   store.replaceState({...state,entries:state.entries.map(entry=>targets.has(entry.id)?{...entry,notebookIds:remove?(entry.notebookIds||[]).filter(value=>value!==id):[...new Set([...(entry.notebookIds||[]),id])]}:entry)});return true;
 }
 function mergeBackup(store,backup){
-  if(!Array.isArray(backup?.entries))throw Error('这不是有效的 VLM 备份');
+  if(!Array.isArray(backup?.entries))throw Error('这不是有效的 VLMReader 备份');
   const state=store.state,notebooks=[...state.notebooks],mapping=new Map();
   const sourceId=id=>state.books.find(book=>book.id===id||book.hash&&(Array.isArray(backup.books)?backup.books:[]).some(original=>original.id===id&&original.hash===book.hash))?.id;
   for(const original of Array.isArray(backup.notebooks)?backup.notebooks:[]){
