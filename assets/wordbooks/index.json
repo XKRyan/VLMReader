@@ -1,0 +1,26 @@
+[
+  {
+    "id": "sat",
+    "name": "SAT 阅读词汇（精选）",
+    "count": 287,
+    "description": "开放学习词表；SAT 为精选，TOEFL / IELTS 按 ECDICT 标签收录。并非考试机构官方词表。",
+    "source": "https://github.com/kahngjoonkoh/SAT_word_list",
+    "license": "MIT"
+  },
+  {
+    "id": "toefl",
+    "name": "TOEFL 词汇",
+    "count": 6959,
+    "description": "开放学习词表；SAT 为精选，TOEFL / IELTS 按 ECDICT 标签收录。并非考试机构官方词表。",
+    "source": "https://github.com/skywind3000/ECDICT",
+    "license": "MIT"
+  },
+  {
+    "id": "ielts",
+    "name": "IELTS 词汇",
+    "count": 4974,
+    "description": "开放学习词表；SAT 为精选，TOEFL / IELTS 按 ECDICT 标签收录。并非考试机构官方词表。",
+    "source": "https://github.com/skywind3000/ECDICT",
+    "license": "MIT"
+  }
+]

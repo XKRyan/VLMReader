@@ -72,3 +72,22 @@ html:root{color-scheme:light}html:root[data-theme=night]{color-scheme:dark}:root
 .review-lookup .panel-heading{padding:0 0 10px;margin:0 0 10px}.review-lookup .panel-heading strong{font-size:calc(18px * var(--ui-scale));overflow-wrap:anywhere}.review-lookup .definition-block{white-space:pre-wrap;line-height:1.65;margin:12px 0}
 .review-lookup .primary{justify-content:center;width:100%}.review-lookup details p{white-space:pre-wrap;margin:10px 0}.review-lookup>p{line-height:1.6}
 @media(max-width:1100px){.vocabulary-page,.review-page{padding:12px 16px}.review-mixed-label{display:none}.vocab-pagination>div{gap:6px}.vocabulary-page .toolbar-actions{gap:6px}.review-skill-status{display:none}}
+
+/* Review text lookup is word-only; punctuation and blanks remain ordinary text. */
+.sentence-word{display:inline;border:0;border-radius:4px;margin:0;padding:0;background:transparent;color:inherit;font:inherit;line-height:inherit;text-align:inherit;cursor:pointer;transition:background-color .14s,box-shadow .14s}
+.sentence-word:hover,.sentence-word:focus-visible{background:var(--soft);box-shadow:0 2px 0 var(--accent);outline:none}
+.word-sentence{white-space:pre-wrap}
+.word-production textarea{width:min(100%,650px);min-height:110px;resize:vertical;font-size:1.1em;line-height:1.6;margin:16px auto;display:block;text-align:left}
+.word-production .flashcard-front{padding-top:18px;padding-bottom:20px}
+.word-production .flashcard-front h2{font-size:2.4em;margin:12px 0}
+.word-details{margin:16px 0;padding:12px 0;border-top:1px solid var(--line);font-size:.92em;line-height:1.55}
+.word-details summary{cursor:pointer;color:var(--text);padding:6px 0}
+.word-details summary small{color:var(--muted);margin-left:8px;font-weight:400}
+.word-forms{display:flex;gap:8px;flex-wrap:wrap;padding:8px 0}
+.word-forms>span{padding:6px 10px;border:1px solid var(--line);border-radius:8px;display:flex;gap:8px;align-items:baseline}
+.word-forms small,.relation-group small{color:var(--muted)}
+.relation-group h4{margin:14px 0 6px;font-size:1em}.relation-group p{margin:8px 0}.relation-group p>span{display:block;color:var(--muted);font-size:.9em;margin-top:2px}
+.review-lookup{max-height:calc(100% - 36px);overflow:auto}
+@media(prefers-reduced-motion:reduce){.sentence-word{transition:none}}
+
+.wordbook-dialog{width:min(700px,calc(100vw - 40px));max-height:calc(100vh - 60px);overflow:auto;padding:24px}.wordbook-dialog header,.wordbook-dialog footer,.wordbook-preview-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}.wordbook-dialog header h2{display:flex;gap:10px;align-items:center;font-size:1.25em;margin:0}.wordbook-choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:20px 0}.wordbook-choice{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:16px;display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left}.wordbook-choice:hover{border-color:var(--accent);background:var(--soft)}.wordbook-choice svg{color:var(--accent-text,var(--accent))}.wordbook-choice span,.wordbook-file span,.wordbook-preview-heading span{font-size:.8em;color:var(--muted)}.wordbook-file{display:flex;align-items:center;justify-content:space-between;gap:12px}.wordbook-preview{margin:20px 0}.wordbook-dialog .wordbook-preview p{margin:8px 0;font-size:.8em}.wordbook-sample{max-height:160px;overflow:auto;border:1px solid var(--line);border-radius:10px;margin:12px 0}.wordbook-sample>div{display:grid;grid-template-columns:150px minmax(0,1fr);gap:12px;border-bottom:1px solid var(--line);padding:9px 12px;font-size:.85em}.wordbook-sample span{white-space:nowrap;text-overflow:ellipsis;overflow:hidden;color:var(--muted)}.wordbook-preview label{display:flex;align-items:center;gap:14px;margin:10px 0}.wordbook-preview label>input,.wordbook-preview label>select{flex:1;min-width:0}.wordbook-dialog .wordbook-note{font-size:.8em;margin:18px 0;color:var(--muted)}.wordbook-dialog footer{justify-content:flex-end;border-top:1px solid var(--line);padding-top:16px}.wordbook-dialog .wordbook-file{justify-content:space-between}

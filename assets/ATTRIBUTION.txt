@@ -27,3 +27,6 @@ Source: https://github.com/shijinyu/lamejs
 Original LAME: https://github.com/zhuker/lamejs and https://lame.sourceforge.io/
 License and source distribution are supplied in lamejs/.
 Sentence practice is a product design based on retrieval and spacing; it is not claimed to be a uniquely optimal sentence-learning method.
+
+Bundled SAT selection: https://github.com/kahngjoonkoh/SAT_word_list (MIT), headwords only. See wordbooks/SAT-LICENSE.txt.
+TOEFL / IELTS headwords are selected by the existing ECDICT exam tags (MIT). These learning lists are not exam-body official word lists.

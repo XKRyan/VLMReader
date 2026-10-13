@@ -7,6 +7,7 @@ const {Store,DEFAULTS}=require('./store.cjs');
 const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
 const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
+const {createWordbookService}=require('./wordbooks.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
 const {REVIEW_METHODS,isUnreviewed}=require('../shared/review-policy.mjs');
 const {translate,validateBase}=require('./translation.cjs');
@@ -14,6 +15,9 @@ const {convertDocx}=require('./docx.cjs');
 const {createClozeService}=require('./cloze.cjs');
 const {lookupAI}=require('./ai-dictionary.cjs');
 const {generateSentence}=require('./review-examples.cjs');
+const {createWordDetails}=require('./word-details.cjs');
+const {createProductionService}=require('./production.cjs');
+const {LibraryExamples}=require('./library-examples.cjs');
 const {readText,copyImages,imageResources}=require('./document-files.cjs');
 const isTest=process.env.MEMREADER_TEST==='1';
 if(process.platform==='win32')app.setAppUserModelId('study.memreader.desktop');
@@ -24,7 +28,11 @@ app.setPath('userData',path.join(dataDir,'runtime'));
 if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
 const dictionary=new Dictionary(assets);
-const clozeService=createClozeService(store,getKey,{lookup:text=>dictionary.lookup(text)});
+const libraryExamples=new LibraryExamples(store,assets,()=>main?.webContents.send('entries:changed'));
+const wordDetails=createWordDetails(dictionary,dataDir,()=>store.state.settings,getKey);
+const wordbooks=createWordbookService(store,dictionary,assets,()=>libraryExamples.queue());
+const productionService=createProductionService(store,getKey,undefined,undefined,{lookup:text=>dictionary.lookup(text)});
+const clozeService=createClozeService(store,getKey,{lookup:text=>dictionary.lookup(text),findExamples:entry=>libraryExamples.find(entry)});
 let main,progressSaveTimer;const speechService=new SpeechService(assets,dataDir);
 app.on('second-instance',()=>{if(main){if(main.isMinimized())main.restore();main.show();main.focus();}});
 const ui=(zh,en)=>store.state.settings.language==='en'?en:zh;
@@ -55,7 +63,7 @@ async function importBooks(paths){
     const book={id,hash,format:ext,title:path.basename(filename,path.extname(filename)),size:info.size,createdAt:new Date().toISOString(),lastRead:null,progress:0,location:null,favorite:false};
     store.state.books.unshift(book);added.push(book);
   }
-  store.save();return added;
+  store.save();libraryExamples.queue();return added;
 }
 async function generateSpeech(text,sid){
   return speechService.generate(text,sid);
@@ -85,9 +93,16 @@ app.whenReady().then(async()=>{
     b.location=typeof patch.location==='string'?patch.location.slice(0,12000):patch.location;b.progress=Math.max(0,Math.min(1,patch.progress));b.lastRead=new Date().toISOString();
     clearTimeout(progressSaveTimer);progressSaveTimer=setTimeout(()=>{try{store.save();}catch(error){main?.webContents.send('storage:error',error.message);}},600);
   });
-  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);const images=path.resolve(dataDir,'books',b.id+'-assets');if(images.startsWith(path.resolve(dataDir,'books')+path.sep)&&fs.existsSync(images))fs.rmSync(images,{recursive:true});store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.state.notebooks=store.state.notebooks.map(notebook=>({...notebook,bookIds:notebook.bookIds.filter(bookId=>bookId!==id)}));store.save();return true;});
+  handle('books:delete',id=>{const b=bookById(id);const p=path.join(dataDir,'books',b.id+'.'+b.format);if(fs.existsSync(p))fs.unlinkSync(p);const images=path.resolve(dataDir,'books',b.id+'-assets');if(images.startsWith(path.resolve(dataDir,'books')+path.sep)&&fs.existsSync(images))fs.rmSync(images,{recursive:true});store.state.books=store.state.books.filter(b=>b.id!==id);store.state.bookmarks=store.state.bookmarks.filter(m=>m.bookId!==id);store.state.notebooks=store.state.notebooks.map(notebook=>({...notebook,bookIds:notebook.bookIds.filter(bookId=>bookId!==id)}));store.save();libraryExamples.queue();return true;});
+  handle('wordbooks:list',()=>wordbooks.list());
+  handle('wordbooks:preview',async(input={})=>{if(!input.path&&!input.builtin){const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('词书','Word lists'),extensions:['csv','tsv','txt','xlsx','json']}]});if(result.canceled)return null;input={path:result.filePaths[0]};}return wordbooks.preview(input);});
+  handle('wordbooks:import',(token,input)=>wordbooks.commit(token,input));
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
   handle('dictionary:ai-lookup',text=>lookupAI(text,store.state.settings,getKey()));
+  handle('dictionary:details',(input,generate)=>wordDetails(input,generate===true));
+  handle('entries:production',id=>productionService.prepare(id));
+  handle('entries:production-draft',(id,exerciseId,text)=>productionService.draft(id,exerciseId,text));
+  handle('entries:production-answer',(id,exerciseId,text)=>productionService.submit(id,exerciseId,text));
   handle('dictionary:example',input=>{
     if(!input||typeof input.text!=='string'||!input.text.trim()||input.text.length>100||typeof input.translation!=='string'||input.translation.length>4000)throw Error('请输入有效的单词和释义');
     const entry={text:normalize(input.text),translation:input.translation,definition:typeof input.definition==='string'?input.definition.slice(0,1500):'',kind:'word',language:/[\u3400-\u9fff]/.test(input.text)?'zh':'en'};
@@ -113,7 +128,7 @@ app.whenReady().then(async()=>{
     e=store.state.entries.find(entry=>entry.text.toLocaleLowerCase()===text.toLocaleLowerCase());if(e)return encounter(e);
     e=withReviewSkills(makeEntry(input));
     if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
-    collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();return e;
+    collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();libraryExamples.queue();return e;
   });
   handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
   handle('entries:cloze',id=>clozeService.prepare(id));
@@ -121,8 +136,8 @@ app.whenReady().then(async()=>{
   handle('entries:cloze-hint',(id,exerciseId)=>clozeService.hint(id,exerciseId));
   handle('selection:translate',(text,context)=>translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey()));
   handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
-  handle('entries:delete',id=>{store.deleteEntries([id]);return true;});
-  handle('entries:delete-many',ids=>store.deleteEntries(ids));
+  handle('entries:delete',id=>{store.deleteEntries([id]);libraryExamples.queue();return true;});
+  handle('entries:delete-many',ids=>{const count=store.deleteEntries(ids);libraryExamples.queue();return count;});
   handle('entries:review',(id,rating,mode='meaning')=>{
     const e=entryById(id);if(!e.translation)throw Error('请先补全译文再复习');
     const time=new Date(),updated=reviewEntry(e,rating,time,mode),record={entryId:id,mode,rating,time:time.toISOString(),isNew:isUnreviewed(e)};
@@ -166,11 +181,12 @@ app.whenReady().then(async()=>{
   handle('data:import',async()=>{
     const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('VLMReader JSON 备份','VLMReader JSON backup'),extensions:['json']}]});if(result.canceled)return null;
     const imported=JSON.parse(fs.readFileSync(result.filePaths[0],'utf8'));if(!Array.isArray(imported.entries))throw Error('这不是有效的 VLMReader 备份');
-    return mergeBackup(store,imported);
+    const count=mergeBackup(store,imported);libraryExamples.queue();return count;
   });
   handle('data:backup',()=>{const p=path.join(dataDir,'backups','VLMReader-'+Date.now()+'.json');fs.writeFileSync(p,JSON.stringify(store.state,null,2));return p;});
   if(!store.state.books.length && fs.existsSync(path.join(assets,'欢迎阅读.html')))await importBooks([path.join(assets,'欢迎阅读.html')]);
+  libraryExamples.queue();
   if(process.env.MEMREADER_DEV)await main.loadURL(process.env.MEMREADER_DEV);else await main.loadFile(path.join(__dirname,'..','dist','index.html'));
 });
 app.on('window-all-closed',()=>app.quit());
-app.on('before-quit',()=>{clearTimeout(progressSaveTimer);speechService.close();store.save();});
+app.on('before-quit',()=>{clearTimeout(progressSaveTimer);libraryExamples.stop();speechService.close();store.save();});

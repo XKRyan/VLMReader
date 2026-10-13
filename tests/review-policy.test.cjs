@@ -5,7 +5,7 @@ const {nextReview,buildReviewQueue,isUnreviewed,METHOD_GAP}=require('../shared/r
 const {createClozeService}=require('../electron/cloze.cjs');
 const start=new Date('2026-10-13T04:00:00Z');
 function word(){return withReviewSkills(makeEntry({text:'resilient',kind:'word',translation:'有韧性的',context:'A resilient learner keeps trying.'},start));}
-function fixture(t,options={}){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-policy-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const store=new Store(dir);store.state.entries=[word()];let time=start;const service=createClozeService(store,()=>'',{now:()=>time,...options});return {store,service,id:store.state.entries[0].id,advance:minutes=>{time=new Date(time.getTime()+minutes*60000);}};}
+function fixture(t,options={}){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-policy-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));const store=new Store(dir);store.state.entries=[word()];let time=start;let generated=0;const service=createClozeService(store,()=>'',{now:()=>time,random:()=>.9,generate:async e=>({word:e.text,meaning:e.translation,language:e.language,sentence:`The resilient learner completed another exercise ${++generated} yesterday.`,translation:'这位学习者昨天完成了练习。'}),...options});return {store,service,id:store.state.entries[0].id,advance:minutes=>{time=new Date(time.getTime()+minutes*60000);}};}
 test('each method has a separate FSRS card and undo restores only the affected skill',()=>{
   const original=word(),meaning=reviewEntry(original,3,start,'meaning');assert.equal(meaning.reviewSkills.meaning.card.reps,1);assert.equal(meaning.reviewSkills.cloze.card.reps,0);
   const cloze=reviewEntry(meaning,1,new Date(start.getTime()+METHOD_GAP),'cloze');assert.deepEqual(cloze.reviewSkills.meaning,meaning.reviewSkills.meaning);assert.equal(cloze.reviewSkills.cloze.card.reps,1);assert.equal(cloze.card.reps,2);
@@ -31,15 +31,15 @@ test('three persisted hints give meaning, initial letter, then one automatic Aga
   assert.equal(f.service.hint(f.id,q.exercise.id).exercise.hints,2);const revealed=f.service.hint(f.id,q.exercise.id);assert.equal(revealed.result.record.rating,1);assert.equal(revealed.result.revealed,true);assert.equal(revealed.entry.clozePractice.correct,0);
   f.service.hint(f.id,q.exercise.id);assert.equal(f.store.state.stats.reviews.length,1);assert.equal(revealed.entry.reviewSkills.meaning.card.reps,0);
 });
-test('hint-assisted correct answers use Hard rather than inflating unassisted recall',async t=>{
-  const f=fixture(t),q=await f.service.prepare(f.id);f.service.hint(f.id,q.exercise.id);const result=f.service.submit(f.id,q.exercise.id,'resilient');assert.equal(result.result.record.rating,2);assert.equal(result.result.correct,true);
+test('hint-assisted correct answers require relearning rather than inflating unassisted recall',async t=>{
+  const f=fixture(t),q=await f.service.prepare(f.id);f.service.hint(f.id,q.exercise.id);const result=f.service.submit(f.id,q.exercise.id,'resilient');assert.equal(result.result.record.rating,1);assert.equal(result.result.correct,true);assert.equal(result.result.assisted,true);assert.equal(result.entry.clozePractice.unassistedStreak,0);
 });
 test('valid synonyms are neutral, cached and deferred without changing mastery',async t=>{
   let calls=0;const f=fixture(t,{judge:async()=>{calls++;return {neutral:true,reason:'本句可替换。'};}}),q=await f.service.prepare(f.id),before=JSON.stringify(f.store.state.entries[0].reviewSkills);
   const [a,b]=await Promise.all([f.service.submit(f.id,q.exercise.id,'tough'),f.service.submit(f.id,q.exercise.id,'tough')]);assert.equal(a.result.outcome,'neutral');assert.deepEqual(a.result,b.result);assert.equal(calls,1);assert.equal(f.store.state.stats.reviews.length,1);assert.equal(JSON.stringify(a.entry.reviewSkills),before);assert.equal(a.result.record.rating,0);assert.ok(!isUnreviewed(a.entry));assert.equal(nextReview(a.entry,DEFAULTS,+start).due,+start+600000);assert.ok(!a.entry.clozePractice.originalPassedFingerprint);
-  f.advance(10);const again=await f.service.prepare(f.id);await f.service.submit(f.id,again.exercise.id,'tough');assert.equal(calls,1);assert.equal(f.store.state.entries[0].reviewSkills.cloze.card.reps,0);
+  f.advance(10);const again=await f.service.prepare(f.id);assert.notEqual(again.exercise.sentence,q.exercise.sentence);await f.service.submit(f.id,again.exercise.id,'tough');assert.equal(calls,2);assert.equal(f.store.state.entries[0].reviewSkills.cloze.card.reps,0);
 });
-test('antonyms and unsuitable forms remain wrong; judge failure does not grade',async t=>{
+test('explicitly incompatible answers remain wrong; judge failure does not grade',async t=>{
   const f=fixture(t,{judge:async()=>({neutral:false,reason:'反义词。'})}),q=await f.service.prepare(f.id);assert.equal((await f.service.submit(f.id,q.exercise.id,'fragile')).result.record.rating,1);
   f.advance(10);const other=await f.service.prepare(f.id),failed=createClozeService(f.store,()=>'',{judge:async()=>{throw Error('offline');}}),before=JSON.stringify(f.store.state);
   await assert.rejects(failed.submit(f.id,other.exercise.id,'tough'),/offline/);assert.equal(JSON.stringify(f.store.state),before);

@@ -1,6 +1,6 @@
 {
   "name": "vlm-reader",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "VLMReader — 阅读、理解与记忆",
   "author": "VLMReader",
   "private": true,
@@ -65,7 +65,12 @@
       "**/@breezystack/lamejs/**",
       "**/sherpa-onnx*/**",
       "**/*.node",
-      "**/*.dll"
+      "**/*.dll",
+      "electron/context*.cjs",
+      "electron/review-examples.cjs",
+      "electron/translation.cjs",
+      "electron/document-files.cjs",
+      "**/node_modules/**/*"
     ],
     "win": {
       "target": "dir",

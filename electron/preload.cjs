@@ -1,12 +1,14 @@
 const {contextBridge,ipcRenderer,webUtils}=require('electron');
 const invoke=channel=>(...args)=>ipcRenderer.invoke(channel,...args);
 contextBridge.exposeInMainWorld('mem',{
-  boot:invoke('boot'), importBooks:invoke('books:import'), readBook:invoke('books:read'), updateBook:invoke('books:update'), deleteBook:invoke('books:delete'),
+  boot:invoke('boot'), wordbooks:invoke('wordbooks:list'),previewWordbook:invoke('wordbooks:preview'),importWordbook:invoke('wordbooks:import'),importBooks:invoke('books:import'), readBook:invoke('books:read'), updateBook:invoke('books:update'), deleteBook:invoke('books:delete'),
   reportProgress:(id,patch)=>ipcRenderer.send('books:progress',id,patch),
   createNotebook:invoke('notebooks:create'),updateNotebook:invoke('notebooks:update'),deleteNotebook:invoke('notebooks:delete'),assignNotebook:invoke('notebooks:assign'),
   onStorageError:fn=>{const listener=(_event,message)=>fn(message);ipcRenderer.on('storage:error',listener);return()=>ipcRenderer.removeListener('storage:error',listener);},
   lookup:invoke('dictionary:lookup'),lookupAI:invoke('dictionary:ai-lookup'),dictionaryExample:invoke('dictionary:example'), collect:invoke('entries:collect'), translate:invoke('entries:translate'), translateSelection:invoke('selection:translate'), updateEntry:invoke('entries:update'), deleteEntry:invoke('entries:delete'), deleteEntries:invoke('entries:delete-many'),
   review:invoke('entries:review'), undoReview:invoke('entries:undo'), intervals:invoke('entries:intervals'),
+  wordDetails:invoke('dictionary:details'),production:invoke('entries:production'),productionDraft:invoke('entries:production-draft'),answerProduction:invoke('entries:production-answer'),
+  onEntriesChanged:fn=>{const listener=()=>fn();ipcRenderer.on('entries:changed',listener);return ()=>ipcRenderer.removeListener('entries:changed',listener);},
   cloze:invoke('entries:cloze'),answerCloze:invoke('entries:cloze-answer'),hintCloze:invoke('entries:cloze-hint'),clozeNotebook:invoke('notebooks:cloze'),
   bookmark:invoke('bookmarks:add'), deleteBookmark:invoke('bookmarks:delete'), note:invoke('notes:add'), updateNote:invoke('notes:update'), deleteNote:invoke('notes:delete'),
   saveSettings:invoke('settings:save'), testApi:invoke('settings:test-api'), exportData:invoke('data:export'), importData:invoke('data:import'), backup:invoke('data:backup'),

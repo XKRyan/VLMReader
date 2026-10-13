@@ -1,5 +1,5 @@
 import type {Entry,Settings,State,ReviewMode} from '../src/types';
-export interface ReviewTask {entryId:string;mode:ReviewMode;due:number;isNew:boolean;learning:boolean;urgency?:number}
+export interface ReviewTask {entryId:string;mode:ReviewMode;due:number;isNew:boolean;learning:boolean;urgency?:number;blocked?:boolean}
 export const REVIEW_METHODS:ReviewMode[];
 export const METHOD_GAP:number;
 export function enabledMethods(settings?:Partial<Settings>):ReviewMode[];

@@ -1,5 +1,5 @@
 const crypto=require('node:crypto');
-const {normalize,makeEntry}=require('./core.cjs');
+const {normalize,makeEntry,withReviewSkills}=require('./core.cjs');
 function notebookIds(state,input){
   const explicit=input.notebookIds||[];
   if(!Array.isArray(explicit)||explicit.some(id=>typeof id!=='string'||!state.notebooks.some(book=>book.id===id)))throw Error('词本不存在');
@@ -56,7 +56,7 @@ function mergeBackup(store,backup){
     const entry={...base,...original,id:base.id,text:base.text,notebookIds:ids,card:valid?card:base.card,history:valid&&Array.isArray(original.history)?original.history:[]};
     for(const key of ['translation','definition','phonetic','dictionaryWord','context','bookId','bookTitle','source','note'])entry[key]=typeof entry[key]==='string'?entry[key]:'';
     entry.contexts=Array.isArray(entry.contexts)?entry.contexts.filter(context=>context&&typeof context.context==='string'):[];
-    entry.bookId=sourceId(entry.bookId)||entry.bookId;entry.contexts=entry.contexts.map(context=>({...context,bookId:sourceId(context.bookId)||context.bookId}));entries.push(entry);count++;
+    entry.bookId=sourceId(entry.bookId)||entry.bookId;entry.contexts=entry.contexts.map(context=>({...context,bookId:sourceId(context.bookId)||context.bookId}));entries.push(withReviewSkills(entry));count++;
   }
   store.replaceState({...state,notebooks,entries});return count;
 }

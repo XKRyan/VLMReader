@@ -1,8 +1,8 @@
-export const REVIEW_METHODS = ['meaning', 'cloze', 'spelling'];
+export const REVIEW_METHODS = ['meaning', 'cloze', 'spelling', 'production'];
 export const METHOD_GAP = 20 * 60 * 1000;
 export function enabledMethods(settings = {}) {
   const chosen = settings.reviewMethods;
-  const valid = Array.isArray(chosen) ? REVIEW_METHODS.filter(mode => chosen.includes(mode)) : REVIEW_METHODS;
+  const valid = Array.isArray(chosen) ? REVIEW_METHODS.filter(mode => chosen.includes(mode)) : REVIEW_METHODS.slice(0,3);
   return valid.length ? valid : ['meaning'];
 }
 export function totalReviews(entry) {
@@ -18,21 +18,33 @@ function lastPractice(entry) {
   return Math.max(...REVIEW_METHODS.map(mode => timestamp(entry.reviewSkills?.[mode]?.card?.last_review)),
     timestamp(entry.card?.last_review), timestamp(entry.clozePractice?.lastResult?.record?.time));
 }
+function lastMethod(entry) {
+  const practices = REVIEW_METHODS.map(mode=>({mode,time:timestamp(entry.reviewSkills?.[mode]?.card?.last_review)}));
+  const result=entry.clozePractice?.lastResult?.record;
+  if(result)practices.push({mode:'cloze',time:timestamp(result.time)});
+  const last=entry.history?.at(-1);
+  if(last?.mode)practices.push({mode:last.mode,time:timestamp(last.log?.review)});
+  return practices.reduce((latest,item)=>item.time>=latest.time?item:latest,{time:-1})?.mode;
+}
 // One task per word. Trained skills keep independent FSRS cards; untouched
-// skills are introduced with a gap rather than drilling all three immediately.
+// skills are introduced with a gap instead of revealing every answer together.
 export function nextReview(entry, settings = {}, now = Date.now()) {
   if (entry.kind !== 'word' || !entry.reviewSkills) {
     const modes=enabledMethods(settings);
     return {entryId: entry.id, mode: entry.kind === 'sentence' ? settings.sentenceReviewMode || 'meaning' : modes.includes('meaning')?'meaning':modes[0],
       due: timestamp(entry.card?.due), isNew: isUnreviewed(entry), learning: [1, 3].includes(entry.card?.state)};
   }
-  const modes = enabledMethods(settings), last = lastPractice(entry), fresh = isUnreviewed(entry);
+  const modes = enabledMethods(settings).filter(mode=>mode!=='production'||settings.apiKeySet), last = lastPractice(entry), fresh = isUnreviewed(entry);
+  if(!modes.length)return {entryId:entry.id,mode:'production',due:Infinity,isNew:fresh,learning:false,blocked:true};
   const first = modes.includes('meaning') ? 'meaning' : modes[0];
-  const lastMode = entry.history?.at(-1)?.mode || entry.clozePractice?.lastResult?.record?.mode;
+  const lastMode = lastMethod(entry);
   const candidates = modes.map(mode => {
     const skill = entry.reviewSkills[mode], card = skill?.card;
     const trained = !!card?.reps;
     let due = trained ? timestamp(card.due) : last ? last + METHOD_GAP : timestamp(entry.createdAt);
+    // Seeing another answer is a cue. Space sibling abilities without changing
+    // their FSRS memory states; same-ability relearning keeps its own short step.
+    if(trained&&last&&mode!==lastMode)due=Math.max(due,last+METHOD_GAP);
     if (mode === 'cloze' && entry.clozePractice?.retryAfter) due = Math.max(due, timestamp(entry.clozePractice.retryAfter));
     const learning = trained && [1, 3].includes(card.state);
     const interval = Math.max(60_000, (card?.scheduled_days || 0) * 86400_000);
@@ -62,8 +74,9 @@ export function buildReviewQueue(state, kind = 'all', scope = '', now = Date.now
   const used = new Set(state.stats.reviews.filter(record => record.isNew && new Date(record.time).toLocaleDateString('en-CA') === day).map(record => record.entryId)).size;
   const tasks = state.entries.filter(entry => !entry.suspended && entry.translation && inNotebook(entry, scope) && (kind === 'all' || kind === entry.kind))
     .map(entry => nextReview(entry, state.settings, now));
-  const due = tasks.filter(task => !task.isNew && task.due <= now)
+  const due = tasks.filter(task => !task.blocked && !task.isNew && task.due <= now)
     .sort((a, b) => Number(b.learning) - Number(a.learning) || a.due - b.due);
-  const fresh = tasks.filter(task => task.isNew).sort((a, b) => a.due - b.due).slice(0, Math.max(0, state.settings.newPerDay - used));
+  const limit=Number.isInteger(state.settings.newPerDay)?state.settings.newPerDay:20;
+  const fresh = tasks.filter(task => !task.blocked && task.isNew&&task.due<=now).sort((a, b) => a.due - b.due).slice(0, Math.max(0,limit - used));
   return [...due, ...fresh];
 }

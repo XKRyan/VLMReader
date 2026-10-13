@@ -9,12 +9,14 @@ const {REVIEW_METHODS,totalReviews,nextReview}=require('../shared/review-policy.
 function withReviewSkills(entry, legacyMode='meaning') {
   if(entry.kind!=='word')return entry;
   const existing=entry.reviewSkills||{}, skills={};
-  for(const mode of REVIEW_METHODS)skills[mode]=existing[mode]||{card:!entry.reviewSkills&&mode===legacyMode?entry.card:createEmptyCard(new Date(entry.createdAt)),lastRating:0};
+  const valid=card=>card&&[0,1,2,3].includes(card.state)&&Number.isFinite(new Date(card.due).getTime())&&['reps','lapses','stability','difficulty','elapsed_days','scheduled_days'].every(key=>Number.isFinite(card[key])&&card[key]>=0)&&(!card.last_review||Number.isFinite(new Date(card.last_review).getTime()));
+  const created=Number.isFinite(new Date(entry.createdAt).getTime())?new Date(entry.createdAt):new Date();
+  for(const mode of REVIEW_METHODS)skills[mode]=valid(existing[mode]?.card)?{...existing[mode],lastRating:[0,1,2,3,4].includes(existing[mode].lastRating)?existing[mode].lastRating:0}:{card:!entry.reviewSkills&&mode===legacyMode&&valid(entry.card)?entry.card:createEmptyCard(created),lastRating:0};
   return {...entry,reviewSkills:skills};
 }
 function reviewEntry(entry, rating, now = new Date(), mode='meaning') {
   if (![Rating.Again, Rating.Hard, Rating.Good, Rating.Easy].includes(rating)) throw Error('无效的复习评分');
-  if(!REVIEW_METHODS.includes(mode)||entry.kind==='sentence'&&mode==='spelling')throw Error('复习方式无效');
+  if(!REVIEW_METHODS.includes(mode)||entry.kind==='sentence'&&!['meaning','cloze'].includes(mode))throw Error('复习方式无效');
   entry=withReviewSkills(entry);
   const before=entry.kind==='word'?entry.reviewSkills[mode].card:entry.card;
   const result = scheduler.next(hydrate(before), now, rating);
@@ -49,7 +51,7 @@ function makeEntry(input, now = new Date()) {
 function csvEscape(s) { return '"' + String(s || '').replace(/"/g, '""') + '"'; }
 function vocabularyCsv(entries,settings={}) {
   const header = ['内容','类型','译文','完整英文释义','音标','原句','来源文档','位置','备注','下次复习'];
-  const rows = entries.map(e => [e.text, e.kind, e.translation, e.definition, e.phonetic, e.context, e.bookTitle, e.location, e.note, new Date(nextReview(e,settings).due).toISOString()].map(csvEscape).join(','));
+  const rows = entries.map(e => {const due=nextReview(e,settings).due;return [e.text, e.kind, e.translation, e.definition, e.phonetic, e.context, e.bookTitle, e.location, e.note, Number.isFinite(due)?new Date(due).toISOString():''].map(csvEscape).join(',');});
   return '\ufeff' + header.map(csvEscape).join(',') + '\r\n' + rows.join('\r\n');
 }
 module.exports = { normalize, hydrate, makeEntry, reviewEntry, reviewIntervals, undoReviewEntry, withReviewSkills, vocabularyCsv };

@@ -10,14 +10,14 @@ function fixture(t,context='A resilient learner keeps trying.'){
   const service=createClozeService(store,()=>'',{generate,random:()=>.9,now:()=>clock});
   return {store,entry,service,generate,calls:()=>calls,advance:()=>{clock=new Date(store.state.entries[0].card.due);}};
 }
-test('original must be correct before AI examples; grading is atomic, persistent and idempotent',async t=>{
+test('original is used first, mistakes get a new context; grading is atomic and idempotent',async t=>{
   const f=fixture(t);let q=await f.service.prepare(f.entry.id);assert.equal(q.exercise.source,'original');assert.equal(f.calls(),0);
   assert.throws(()=>f.service.submit(f.entry.id,q.exercise.id,' '),/填写/);assert.equal(f.store.state.stats.reviews.length,0);
   const wrong=f.service.submit(f.entry.id,q.exercise.id,'fragile');assert.equal(wrong.result.record.rating,1);assert.equal(wrong.result.correct,false);
   assert.equal(f.service.submit(f.entry.id,q.exercise.id,'resilient').result.correct,false);assert.equal(f.store.state.stats.reviews.length,1);
-  f.advance();q=await f.service.prepare(f.entry.id);assert.equal(q.exercise.source,'original');
+  f.advance();q=await f.service.prepare(f.entry.id);assert.equal(q.exercise.source,'generated');assert.notEqual(q.exercise.sentence,f.entry.context);
   const good=f.service.submit(f.entry.id,q.exercise.id,' Resilient ');assert.equal(good.result.record.rating,3);
-  f.advance();q=await f.service.prepare(f.entry.id);assert.equal(q.exercise.source,'generated');assert.equal(f.calls(),1);assert.equal(q.entry.context,f.entry.context);
+  f.advance();q=await f.service.prepare(f.entry.id);assert.equal(q.exercise.source,'generated');assert.equal(f.calls(),2);assert.equal(q.entry.context,f.entry.context);
   const restart=new Store(f.store.dir),resumed=createClozeService(restart,()=>'',{generate:()=>{throw Error('should not call API');}});
   assert.equal((await resumed.prepare(f.entry.id)).exercise.id,q.exercise.id);assert.equal(restart.state.stats.reviews.length,2);
   const previous=JSON.stringify(restart.state);restart.save=()=>{throw Error('disk full');};

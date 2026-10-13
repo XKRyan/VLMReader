@@ -1,8 +1,8 @@
-export type ReviewMode='meaning'|'cloze'|'spelling';
+export type ReviewMode='meaning'|'cloze'|'spelling'|'production';
 export interface ReviewRecord {entryId:string;rating:number;time:string;isNew:boolean;mode?:ReviewMode;exerciseId?:string;outcome?:'correct'|'incorrect'|'neutral';hints?:number}
 export interface ReviewCard {due:string;state:number;reps:number;lapses:number;stability:number;difficulty:number;last_review?:string;scheduled_days?:number}
-export interface ClozeExercise {id:string;sentence:string;translation:string;target:string;masked:string;source:"original"|"generated";exampleId:string;fingerprint:string;createdAt:string;repeated:boolean;hints?:number;alternatives?:string[]}
-export interface ClozeResult {exerciseId:string;correct:boolean;outcome?:'correct'|'incorrect'|'neutral';reason?:string;revealed?:boolean;expected:string;due:string;record:ReviewRecord}
+export interface ClozeExercise {id:string;sentence:string;translation:string;target:string;masked:string;source:"original"|"generated"|"library";exampleId:string;fingerprint:string;createdAt:string;repeated:boolean;hints?:number;hintStages?:('english'|'meaning'|'initial')[];alternatives?:string[];bookId?:string;bookTitle?:string;location?:string|number}
+export interface ClozeResult {exerciseId:string;correct:boolean;assisted?:boolean;outcome?:'correct'|'incorrect'|'neutral';reason?:string;revealed?:boolean;expected:string;due:string;record:ReviewRecord}
 export interface Book { id:string;title:string;format:string;size:number;createdAt:string;lastRead:string|null;progress:number;location:string|number|null;favorite:boolean;pageCount?:number;cover?:string }
 export interface Entry { id:string;notebookIds:string[];text:string;language:'en'|'zh';kind:'word'|'sentence';translation:string;definition:string;phonetic:string;dictionaryWord:string;explanation?:string;contextTranslation?:string;reviewTarget?:string;reviewSkills?:Record<ReviewMode,{card:ReviewCard;lastRating:number}>;clozePractice?:{active?:ClozeExercise|null;attempts:number;correct:number;neutral?:number;retryAfter?:string|null;originalPassedFingerprint?:string;lastResult?:ClozeResult};context:string;contexts:{context:string;bookTitle:string;bookId:string;location:string}[];bookId:string;bookTitle:string;location:string;source:string;status:'pending'|'ready';note:string;suspended:boolean;encounters:number;createdAt:string;updatedAt?:string;card:ReviewCard;history:unknown[] }
 export interface Mark { id:string;bookId:string;location:string|number;text:string;note?:string;createdAt:string;cfi?:string;start?:number;context?:string;updatedAt?:string }
@@ -11,11 +11,20 @@ export interface Notebook {id:string;name:string;bookIds:string[];createdAt:stri
 export interface State {books:Book[];entries:Entry[];notebooks:Notebook[];bookmarks:Mark[];notes:Mark[];settings:Settings;stats:{minutes:number;reviews:ReviewRecord[]};dataDir:string;dictionaryInfo:{enCount:number;zhCount:number};ttsReady:boolean}
 export interface SelectionInfo {text:string;context:string;location:string|number;cfi?:string;start?:number;kind?:'word'|'sentence'}
 export interface DictionaryEntry {word:string;phonetic:string;definition:string;translation:string;source:string;tags:string;exchange:string;original?:string}
+export interface WordRelations {lemma:string;forms:{word:string;code:string;label:string}[];synonyms:{word:string;pos:string;meaning:string;note:string}[];derivations:{word:string;pos:string;meaning:string;note:string}[];cached:boolean}
+export interface ProductionExercise {id:string;fingerprint:string;draft:string;allowedWords?:string[]}
+export interface ProductionResult {exerciseId:string;sentence:string;rating:number;feedback:string;corrected:string;due:string;record:ReviewRecord}
+export interface WordbookInfo {id:string;name:string;count:number;description:string;source:string;license:string}
+export interface WordbookPreview {token:string;name:string;description:string;count:number;skipped:number;sample:{text:string;translation:string}[]}
+export interface WordbookImport {notebook:Notebook;added:number;existing:number;pending:number;total:number}
 export interface ReaderMeta {index:number;count:number;toc:{label:string;href:string;depth?:number}[];scanned?:boolean}
 export interface SearchHit {label:string;location:string|number;excerpt:string}
 export interface ReaderControl {next:()=>void;prev:()=>void;go:(where:string|number)=>void;search:(q:string)=>Promise<SearchHit[]>;getText:()=>string;nextText:()=>Promise<string|null>;peekNextText?:()=>Promise<string|null>;highlight:(mark:Mark)=>void;locate:(mark:Mark)=>void}
 export interface SpeechEvent {id:string;type:'chunk'|'end'|'error'|'cue';data?:string;duration?:number;text?:string;start?:number;error?:string}
 export interface MemAPI {
+  wordbooks:()=>Promise<WordbookInfo[]>;previewWordbook:(input?:{builtin?:string;path?:string})=>Promise<WordbookPreview|null>;importWordbook:(token:string,input:{name?:string;notebookId?:string})=>Promise<WordbookImport>;
+  wordDetails:(input:{text:string;translation:string;definition?:string},generate?:boolean)=>Promise<WordRelations>;
+  production:(id:string)=>Promise<{entry:Entry;exercise:ProductionExercise}>;productionDraft:(id:string,exerciseId:string,text:string)=>Promise<Entry>;answerProduction:(id:string,exerciseId:string,text:string)=>Promise<{entry:Entry;result:ProductionResult}>;onEntriesChanged:(fn:()=>void)=>()=>void;
   createNotebook:(input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;updateNotebook:(id:string,input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;deleteNotebook:(id:string)=>Promise<boolean>;assignNotebook:(id:string,ids:string[],remove?:boolean)=>Promise<boolean>;
   reportProgress:(id:string,patch:{location:string|number;progress:number})=>void;onStorageError:(fn:(error:string)=>void)=>()=>void;
   boot:()=>Promise<State>; importBooks:(paths?:string[])=>Promise<Book[]>;readBook:(id:string)=>Promise<{html?:string;text?:string;bytes?:Uint8Array;warnings?:string[];resources?:Record<string,string>}>;updateBook:(id:string,patch:Partial<Book>)=>Promise<Book>;deleteBook:(id:string)=>Promise<boolean>;
