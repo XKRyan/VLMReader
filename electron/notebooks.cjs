@@ -16,7 +16,7 @@ function saveNotebook(store,input,id){
   if(!name||name.length>60)throw Error('词本名称需为 1–60 个字符');
   if(state.notebooks.some(book=>book.id!==id&&book.name.toLocaleLowerCase()===name.toLocaleLowerCase()))throw Error('已经有同名词本');
   if(!Array.isArray(input.bookIds)||input.bookIds.some(bookId=>!state.books.some(book=>book.id===bookId)))throw Error('请选择书架中的文档');
-  const notebook={id:id||crypto.randomUUID(),createdAt:existing?.createdAt||new Date().toISOString(),name,bookIds:[...new Set(input.bookIds)]};
+  const notebook={id:id||crypto.randomUUID(),createdAt:existing?.createdAt||new Date().toISOString(),name,bookIds:[...new Set(input.bookIds)],...(existing?.system?{system:existing.system}:{})};
   const sources=new Set(notebook.bookIds);
   const entries=input.includeExisting?state.entries.map(entry=>sources.has(entry.bookId)||(entry.contexts||[]).some(context=>sources.has(context.bookId))?{...entry,notebookIds:[...new Set([...(entry.notebookIds||[]),notebook.id])]}:entry):state.entries;
   store.replaceState({...state,entries,notebooks:existing?state.notebooks.map(book=>book.id===id?notebook:book):[...state.notebooks,notebook]});
@@ -41,8 +41,8 @@ function mergeBackup(store,backup){
     const name=normalize(original.name).slice(0,60);if(!name)continue;
     const sources=[...new Set((Array.isArray(original.bookIds)?original.bookIds:[]).map(sourceId).filter(Boolean))];
     let group=notebooks.find(item=>item.name.toLocaleLowerCase()===name.toLocaleLowerCase());
-    if(group){const next={...group,bookIds:[...new Set([...group.bookIds,...sources])]};notebooks[notebooks.indexOf(group)]=next;group=next;}
-    else {group={id:crypto.randomUUID(),name,bookIds:sources,createdAt:new Date().toISOString()};notebooks.push(group);}
+    if(group){const next={...group,bookIds:[...new Set([...group.bookIds,...sources])],...(original.system==='cloze'?{system:'cloze'}:{})};notebooks[notebooks.indexOf(group)]=next;group=next;}
+    else {group={id:crypto.randomUUID(),name,bookIds:sources,createdAt:new Date().toISOString(),...(original.system==='cloze'?{system:'cloze'}:{})};notebooks.push(group);}
     mapping.set(original.id,group.id);
   }
   const entries=[...state.entries];let count=0;

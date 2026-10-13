@@ -37,3 +37,38 @@ html:root{color-scheme:light}html:root[data-theme=night]{color-scheme:dark}:root
 .dictionary-page{max-width:1050px;margin:0 auto;padding:40px;width:100%}.dictionary-search{display:flex;align-items:center;gap:16px;background:var(--paper);border:1px solid var(--border);padding:12px;border-radius:12px}.dictionary-search input{flex:1;min-width:0;background:transparent;border:0;padding:8px;color:var(--text)}.dictionary-result{background:var(--paper);border:1px solid var(--border);border-radius:16px;padding:32px;margin-top:24px}.dictionary-title{display:flex;align-items:center;gap:12px;flex-wrap:wrap}.dictionary-title h2{font-size:2rem;margin:0}.dictionary-title .badge{margin-left:auto}.dictionary-definition,.dictionary-result .definition-block{white-space:pre-wrap}.dictionary-examples{margin-top:28px;padding-top:20px;border-top:1px solid var(--border)}.dictionary-section-title,.dictionary-save{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.dictionary-result blockquote{margin:20px 0 12px;padding-left:18px;border-left:3px solid var(--accent);font-size:1.15em;line-height:1.8}.dictionary-save{margin-top:28px;justify-content:flex-start}.dictionary-save select{padding:12px;border:1px solid var(--border);border-radius:8px;background:var(--paper);color:var(--text)}@media(max-width:800px){.dictionary-page{padding:22px}.dictionary-result{padding:22px}}
 
 .word-cloze .flashcard-front{min-height:0;padding:28px 0 20px}.word-cloze .flashcard-back{padding-top:20px}
+
+/* Fixed tools and bounded content keep review and vocabulary inside the window. */
+.main{min-height:0;overflow:hidden}.topbar{flex:none;height:46px}
+.vocabulary-page,.review-page{display:flex;flex-direction:column;overflow:hidden;padding:16px 24px 12px;min-height:0;min-width:0}
+.vocabulary-page>.page-heading,.review-page>.page-heading{flex:none;margin-bottom:12px;gap:12px;align-items:center}
+.vocabulary-page .page-heading h1,.review-page .page-heading h1{font-size:calc(20px * var(--ui-scale));margin:0}
+.vocabulary-page .page-heading p{display:none}.vocabulary-page .notebook-bar{flex:none;padding:9px 12px;margin:0 0 10px;gap:10px}
+.vocabulary-page .notebook-bar select{padding:8px 10px;max-width:380px;min-width:160px}.vocabulary-page .vocab-toolbar{flex:none;margin:0 0 8px;gap:10px}
+.vocabulary-page .shelf-filters{flex:none;margin:0;padding:0;min-height:38px;gap:8px}.vocabulary-page .shelf-filters>div{gap:16px;flex-wrap:wrap}
+.vocabulary-page .vocab-layout{flex:1;min-height:0;overflow:hidden}.vocabulary-page .vocab-list{overflow:auto;min-height:0;overscroll-behavior:contain;scrollbar-gutter:stable}
+.vocabulary-page .table-heading{position:sticky;top:0;z-index:2}.vocabulary-page .vocab-detail{min-height:0;overflow:auto;overscroll-behavior:contain}
+.vocabulary-page .vocab-bulk-actions{flex:none;margin:8px 0;padding:8px 12px;flex-wrap:wrap}.vocab-bulk-actions>div{flex-wrap:wrap;gap:8px}
+.vocab-pagination{display:flex;align-items:center;justify-content:space-between;flex:none;gap:12px;padding:10px 0 0;color:var(--muted);font-size:calc(10px * var(--ui-scale))}
+.vocab-pagination>div,.vocab-pagination label{display:flex;align-items:center;gap:10px}.vocab-pagination select{padding:6px 10px;min-width:64px}
+.review-heading-actions{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.review-heading-actions>span{font-size:calc(10px * var(--ui-scale));color:var(--muted)}
+.review-kind-filter{flex:none;margin:0 0 10px;gap:10px;flex-wrap:wrap}.review-kind-filter select{padding:8px 10px;min-width:140px}.review-mixed-label{margin-left:auto;color:var(--muted);font-size:calc(10px * var(--ui-scale))}
+.review-session-top{flex:none;margin:0 0 8px;gap:12px}.review-page>.session-progress{flex:none;margin:0 0 12px;height:3px}
+.review-current-method{margin-left:auto}.review-card-scroll{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.review-page .flashcard{padding:18px 24px;box-shadow:none}.review-page .flashcard-front,.review-page .word-cloze .flashcard-front{padding:20px 4px 16px;min-height:0}
+.review-page .flashcard-front>h2{font-size:calc(32px * var(--ui-scale));line-height:1.35}.review-page .flashcard-front>h2.sentence{font-size:calc(19px * var(--ui-scale))}
+.review-page .flashcard-front .phonetic{margin-top:8px}.review-page .flashcard-front .icon-button{margin:10px auto}
+.review-page .recall-prompt{margin:8px 0 0}.review-page .flashcard-back,.review-page .word-cloze .flashcard-back{padding:14px 0}
+.review-page .answer-label{margin-bottom:10px}.review-page .flashcard-translation{margin-bottom:10px;line-height:1.6}.review-page .flashcard-back blockquote{margin:10px 0;line-height:1.6}
+.review-page .flashcard-back>.text-button{margin:0 0 10px}.review-page .flashcard-back>p{line-height:1.6;margin:8px 0}.review-page .ratings{padding-top:12px}
+.review-page .reveal-area{padding:14px 0 0}.review-page .reveal-area .primary{display:inline-flex;min-width:0;width:auto;justify-content:center;align-items:center;text-align:center;gap:8px;padding:10px 24px;min-height:40px}
+.review-page .cloze-text{font-size:calc(20px * var(--ui-scale));line-height:1.65}.review-page .cloze-text+input{margin-top:18px}.review-page .flashcard-front input{padding:10px 14px;font-size:calc(19px * var(--ui-scale))}
+.cloze-hint{padding:8px 12px;margin-top:12px;background:var(--soft);color:var(--accent-text);border-radius:7px;white-space:pre-wrap;text-align:left;font-size:calc(11px * var(--ui-scale))}
+.cloze-hint-actions{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:12px;flex-wrap:wrap}.cloze-hint-actions small{color:var(--muted);font-size:calc(10px * var(--ui-scale))}
+.spelling-check.neutral{background:var(--secondary);color:var(--text)}.review-page .cloze-due{margin:10px 0;font-size:calc(12px * var(--ui-scale))}
+.review-bottom{flex:none;margin-top:10px;flex-wrap:wrap;gap:8px;font-size:calc(9px * var(--ui-scale))}.review-skill-status{margin-left:auto;gap:12px;flex-wrap:wrap}
+.review-page .review-complete{padding:30px 24px}.review-page .complete-mark{width:58px;height:58px;margin-bottom:18px}
+.review-lookup{position:fixed;right:24px;top:106px;z-index:45;width:330px;max-height:calc(100vh - 135px);overflow:auto;padding:18px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px #17213a22;font-size:calc(11px * var(--ui-scale))}
+.review-lookup .panel-heading{padding:0 0 10px;margin:0 0 10px}.review-lookup .panel-heading strong{font-size:calc(18px * var(--ui-scale));overflow-wrap:anywhere}.review-lookup .definition-block{white-space:pre-wrap;line-height:1.65;margin:12px 0}
+.review-lookup .primary{justify-content:center;width:100%}.review-lookup details p{white-space:pre-wrap;margin:10px 0}.review-lookup>p{line-height:1.6}
+@media(max-width:1100px){.vocabulary-page,.review-page{padding:12px 16px}.review-mixed-label{display:none}.vocab-pagination>div{gap:6px}.vocabulary-page .toolbar-actions{gap:6px}.review-skill-status{display:none}}

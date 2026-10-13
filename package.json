@@ -1,6 +1,6 @@
 {
   "name": "vlm-reader",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "VLMReader — 阅读、理解与记忆",
   "author": "VLMReader",
   "private": true,
@@ -51,6 +51,7 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
+      "shared/**/*",
       "package.json"
     ],
     "extraResources": [

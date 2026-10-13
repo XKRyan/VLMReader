@@ -1,9 +1,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const {sanitizeColorThemes}=require('./palette.cjs');
+const {withReviewSkills}=require('./core.cjs');
+const {enabledMethods}=require('../shared/review-policy.mjs');
 const DEFAULTS = { theme: 'paper', colorThemes:{}, fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
   autoSave: true, autoSaveSentences:false, preloadSpeech:true, hoverTranslate: false, rate: 1, enVoice: 0, zhVoice: 3, language:'zh', continuousRead:true,
-  newPerDay: 20, reviewMode: 'meaning', sentenceReviewMode:'meaning', apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false };
+  newPerDay: 20, vocabPageSize:20,reviewMethods:['meaning','cloze','spelling'],reviewMode: 'meaning', sentenceReviewMode:'meaning', apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false };
 class Store {
   constructor(dir) {
     this.dir = dir; fs.mkdirSync(dir, {recursive:true});
@@ -21,6 +23,12 @@ class Store {
     }
     this.state.settings = {...DEFAULTS,...this.state.settings};
     this.state.settings.colorThemes = sanitizeColorThemes(this.state.settings.colorThemes);
+    this.state.settings.reviewMethods=enabledMethods(this.state.settings);
+    this.state.entries=this.state.entries.map(entry=>{
+      const last=this.state.stats.reviews.findLast(record=>record.entryId===entry.id);
+      const legacyMode=last?.mode|| (last?.exerciseId?'cloze':'meaning');
+      return withReviewSkills(entry,legacyMode);
+    });
     if(!Array.isArray(this.state.notebooks))this.state.notebooks=[];
     for(const entry of this.state.entries)entry.notebookIds=[...new Set((Array.isArray(entry.notebookIds)?entry.notebookIds:[]).filter(id=>this.state.notebooks.some(book=>book.id===id)))];
     if (!Number.isInteger(this.state.settings.uiFontSize) || this.state.settings.uiFontSize < 13 || this.state.settings.uiFontSize > 22) this.state.settings.uiFontSize = DEFAULTS.uiFontSize;

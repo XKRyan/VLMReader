@@ -7,7 +7,8 @@ const {Store,DEFAULTS}=require('./store.cjs');
 const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
 const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
-const {makeEntry,normalize,reviewEntry,reviewIntervals,vocabularyCsv}=require('./core.cjs');
+const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
+const {REVIEW_METHODS,isUnreviewed}=require('../shared/review-policy.mjs');
 const {translate,validateBase}=require('./translation.cjs');
 const {convertDocx}=require('./docx.cjs');
 const {createClozeService}=require('./cloze.cjs');
@@ -22,8 +23,8 @@ const dataDir=isTest?process.env.MEMREADER_TEST_DATA:path.join(baseDir,'data');
 app.setPath('userData',path.join(dataDir,'runtime'));
 if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
-const clozeService=createClozeService(store,getKey);
 const dictionary=new Dictionary(assets);
+const clozeService=createClozeService(store,getKey,{lookup:text=>dictionary.lookup(text)});
 let main,progressSaveTimer;const speechService=new SpeechService(assets,dataDir);
 app.on('second-instance',()=>{if(main){if(main.isMinimized())main.restore();main.show();main.focus();}});
 const ui=(zh,en)=>store.state.settings.language==='en'?en:zh;
@@ -93,6 +94,11 @@ app.whenReady().then(async()=>{
     return generateSentence(entry,store.state.settings,getKey());
   });
   handle('notebooks:create',input=>saveNotebook(store,input));
+  handle('notebooks:cloze',()=>{
+    let notebook=store.state.notebooks.find(item=>item.system==='cloze'||item.name==='句子填空');
+    if(!notebook){notebook={id:crypto.randomUUID(),name:'句子填空',system:'cloze',bookIds:[],createdAt:new Date().toISOString()};store.replaceState({...store.state,notebooks:[...store.state.notebooks,notebook]});}
+    return notebook;
+  });
   handle('notebooks:update',(id,input)=>saveNotebook(store,input,id));
   handle('notebooks:delete',id=>deleteNotebook(store,id));
   handle('notebooks:assign',(id,ids,remove)=>assignEntries(store,id,ids,remove));
@@ -105,23 +111,25 @@ app.whenReady().then(async()=>{
     const found=await dictionary.lookup(text).catch(()=>null);
     // Another lookup can finish while the dictionary is loading. Recheck before insertion.
     e=store.state.entries.find(entry=>entry.text.toLocaleLowerCase()===text.toLocaleLowerCase());if(e)return encounter(e);
-    e=makeEntry(input);
+    e=withReviewSkills(makeEntry(input));
     if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
     collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();return e;
   });
   handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
   handle('entries:cloze',id=>clozeService.prepare(id));
   handle('entries:cloze-answer',(id,exerciseId,answer)=>clozeService.submit(id,exerciseId,answer));
+  handle('entries:cloze-hint',(id,exerciseId)=>clozeService.hint(id,exerciseId));
   handle('selection:translate',(text,context)=>translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey()));
   handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
   handle('entries:delete',id=>{store.deleteEntries([id]);return true;});
   handle('entries:delete-many',ids=>store.deleteEntries(ids));
-  handle('entries:review',(id,rating)=>{
+  handle('entries:review',(id,rating,mode='meaning')=>{
     const e=entryById(id);if(!e.translation)throw Error('请先补全译文再复习');
-    const updated=reviewEntry(e,rating);Object.assign(e,updated);store.state.stats.reviews.push({entryId:id,rating,time:new Date().toISOString(),isNew:e.card.reps===1});store.save();return e;
+    const time=new Date(),updated=reviewEntry(e,rating,time,mode),record={entryId:id,mode,rating,time:time.toISOString(),isNew:isUnreviewed(e)};
+    store.replaceState({...store.state,entries:store.state.entries.map(entry=>entry.id===id?updated:entry),stats:{...store.state.stats,reviews:[...store.state.stats.reviews,record]}});return updated;
   });
-  handle('entries:undo',id=>{const e=entryById(id);const last=e.history.pop();if(last){e.card=last.before;const index=store.state.stats.reviews.findLastIndex(r=>r.entryId===id);if(index>=0)store.state.stats.reviews.splice(index,1);store.save();}return e;});
-  handle('entries:intervals',id=>reviewIntervals(entryById(id)));
+  handle('entries:undo',id=>{const e=entryById(id);if(!e.history.length)return e;const updated=undoReviewEntry(e),reviews=[...store.state.stats.reviews],index=reviews.findLastIndex(r=>r.entryId===id&&r.rating>0);if(index>=0)reviews.splice(index,1);store.replaceState({...store.state,entries:store.state.entries.map(entry=>entry.id===id?updated:entry),stats:{...store.state.stats,reviews}});return updated;});
+  handle('entries:intervals',(id,mode='meaning')=>reviewIntervals(entryById(id),new Date(),mode));
   handle('bookmarks:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.bookmarks.unshift(item);store.save();return item;});
   handle('bookmarks:delete',id=>{store.state.bookmarks=store.state.bookmarks.filter(b=>b.id!==id);store.save();});
   handle('notes:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.notes.unshift(item);store.save();return item;});
@@ -132,6 +140,9 @@ app.whenReady().then(async()=>{
     if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
     if('colorThemes' in updates)updates.colorThemes=sanitizeColorThemes(updates.colorThemes,true);
     if('uiFontSize' in updates && (!Number.isInteger(updates.uiFontSize)||updates.uiFontSize<13||updates.uiFontSize>22))throw Error('界面字号需为 13–22px');
+    if('reviewMethods' in updates&&(!Array.isArray(updates.reviewMethods)||!updates.reviewMethods.length||updates.reviewMethods.some(mode=>!REVIEW_METHODS.includes(mode))))throw Error('至少开启一种有效的复习方式');
+    if('reviewMethods' in updates)updates.reviewMethods=REVIEW_METHODS.filter(mode=>updates.reviewMethods.includes(mode));
+    if('vocabPageSize' in updates&&![10,20,50].includes(updates.vocabPageSize))throw Error('每页条数无效');
     if(updates.apiBase)updates.apiBase=validateBase(updates.apiBase);
     if('apiKey' in updates){const key=String(updates.apiKey).trim();if(key){if(!safeStorage.isEncryptionAvailable())throw Error('系统加密存储暂不可用');fs.writeFileSync(path.join(dataDir,'api-key.bin'),safeStorage.encryptString(key));}else{const p=path.join(dataDir,'api-key.bin');if(fs.existsSync(p))fs.unlinkSync(p);}delete updates.apiKey;}
     for(const key of Object.keys(DEFAULTS))if(key in updates && key!=='apiKeySet')store.state.settings[key]=updates[key];
@@ -147,10 +158,10 @@ app.whenReady().then(async()=>{
   handle('window:print',()=>new Promise(resolve=>main.webContents.print({printBackground:true},(ok,reason)=>resolve({ok,reason}))));
   handle('data:open',()=>shell.openPath(dataDir));
   handle('data:export',async(type,notebookId)=>{
-    const csv=type==='csv';if(csv&&notebookId&&notebookId!=='unfiled'&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
-    const entries=csv&&notebookId?store.state.entries.filter(entry=>notebookId==='unfiled'?!entry.notebookIds.length:entry.notebookIds.includes(notebookId)):store.state.entries;
+    const csv=type==='csv';if(csv&&notebookId&&!['unfiled','unreviewed'].includes(notebookId)&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
+    const entries=csv&&notebookId?store.state.entries.filter(entry=>notebookId==='unfiled'?!entry.notebookIds.length:notebookId==='unreviewed'?entry.kind==='word'&&isUnreviewed(entry):entry.notebookIds.includes(notebookId)):store.state.entries;
     const result=await dialog.showSaveDialog(main,{defaultPath:'VLMReader-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
-    if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(entries):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
+    if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(entries,store.state.settings):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
   });
   handle('data:import',async()=>{
     const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('VLMReader JSON 备份','VLMReader JSON backup'),extensions:['json']}]});if(result.canceled)return null;

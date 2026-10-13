@@ -12,21 +12,32 @@ function values(s:Settings){const p=getPalette(s);return {accent:p.accent,bg:p.b
 
 export default function ColorSettings({settings:s,saveSettings}:{settings:Settings;saveSettings:(patch:Partial<Settings>)=>Promise<Settings>}){
   const [open,setOpen]=useState(false),[draft,setDraft]=useState(()=>values(s)),[busy,setBusy]=useState(false),[saved,setSaved]=useState(false);
-  const saving=useRef(false),profile=JSON.stringify(s.colorThemes[s.theme]||{});
-  useEffect(()=>{setDraft(values(s));},[s.theme,profile]);
+  const saving=useRef(false),edited=useRef(false),revision=useRef(0),lastTheme=useRef(s.theme),profile=JSON.stringify(s.colorThemes[s.theme]||{});
+  const queued=useRef<{colorThemes:Settings['colorThemes'];revision:number}|null>(null),flush=useRef(()=>{}),mounted=useRef(true);
+  useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;flush.current();};},[]);
+  useEffect(()=>{if(lastTheme.current!==s.theme){if(queued.current)void apply();lastTheme.current=s.theme;edited.current=false;revision.current++;setDraft(values(s));}else if(!edited.current)setDraft(values(s));},[s.theme,profile]);
   useEffect(()=>{setSaved(false);},[s.theme]);
   const valid=fields.every(field=>color(draft[field.key]));
   const dirty=fields.some(field=>color(draft[field.key])!==values(s)[field.key]);
   const preview=getPalette({...s,colorThemes:{...s.colorThemes,[s.theme]:Object.fromEntries(fields.map(field=>[field.key,color(draft[field.key])||values(s)[field.key]]))}});
-  function change(key:ColorKey,value:string){setDraft(current=>({...current,[key]:value}));setSaved(false);}
+  function change(key:ColorKey,value:string){edited.current=true;revision.current++;setDraft(current=>({...current,[key]:value}));setSaved(false);}
+  useEffect(()=>{
+    if(!edited.current||!valid||busy)return;
+    if(!dirty){edited.current=false;return;}
+    queued.current={colorThemes:{...s.colorThemes,[s.theme]:Object.fromEntries(fields.map(field=>[field.key,color(draft[field.key])!]))},revision:revision.current};
+    const root=document.documentElement;
+    for(const [key,value] of Object.entries(preview))root.style.setProperty('--'+key.replace(/[A-Z]/g,letter=>'-'+letter.toLowerCase()),value);
+    const timer=setTimeout(()=>void apply(),250);return()=>clearTimeout(timer);
+  },[draft,valid,dirty,busy,s.theme]);
   async function apply(reset=false){
-    if(saving.current||!reset&&!valid)return;saving.current=true;setBusy(true);
+    if(saving.current||!reset&&!valid)return;saving.current=true;setBusy(true);const pending=!reset&&queued.current,requestedRevision=pending?pending.revision:revision.current;
     try{
-      const next={...s.colorThemes};
-      if(reset)delete next[s.theme];else next[s.theme]=Object.fromEntries(fields.map(field=>[field.key,color(draft[field.key])!]));
-      const result=await saveSettings({colorThemes:next});setDraft(values(result));setSaved(true);
-    }catch{/* The settings owner displays save errors. */}finally{saving.current=false;setBusy(false);}
+      const next=pending?pending.colorThemes:{...s.colorThemes};
+      if(reset)delete next[s.theme];else if(!pending)next[s.theme]=Object.fromEntries(fields.map(field=>[field.key,color(draft[field.key])!]));
+      const result=await saveSettings({colorThemes:next});if(queued.current?.revision===requestedRevision)queued.current=null;if(requestedRevision===revision.current){edited.current=false;setDraft(values(result));setSaved(true);}
+    }catch{/* The settings owner displays save errors. */}finally{saving.current=false;setBusy(false);if(!mounted.current&&queued.current&&queued.current.revision!==requestedRevision)void apply();}
   }
+  flush.current=()=>{if(queued.current)void apply();};
   return <div className={'color-settings '+(open?'expanded':'')}>
     <button className="color-settings-toggle" aria-expanded={open} aria-controls="color-editor" onClick={()=>setOpen(value=>!value)}>
       <Palette size={17}/><span>{t('调整配色')}</span><span className="color-summary" aria-hidden="true">{fields.map(field=><i key={field.key} style={{background:values(s)[field.key]}}/>)}</span><ChevronDown size={16}/>

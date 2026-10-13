@@ -7,7 +7,7 @@ contextBridge.exposeInMainWorld('mem',{
   onStorageError:fn=>{const listener=(_event,message)=>fn(message);ipcRenderer.on('storage:error',listener);return()=>ipcRenderer.removeListener('storage:error',listener);},
   lookup:invoke('dictionary:lookup'),lookupAI:invoke('dictionary:ai-lookup'),dictionaryExample:invoke('dictionary:example'), collect:invoke('entries:collect'), translate:invoke('entries:translate'), translateSelection:invoke('selection:translate'), updateEntry:invoke('entries:update'), deleteEntry:invoke('entries:delete'), deleteEntries:invoke('entries:delete-many'),
   review:invoke('entries:review'), undoReview:invoke('entries:undo'), intervals:invoke('entries:intervals'),
-  cloze:invoke('entries:cloze'),answerCloze:invoke('entries:cloze-answer'),
+  cloze:invoke('entries:cloze'),answerCloze:invoke('entries:cloze-answer'),hintCloze:invoke('entries:cloze-hint'),clozeNotebook:invoke('notebooks:cloze'),
   bookmark:invoke('bookmarks:add'), deleteBookmark:invoke('bookmarks:delete'), note:invoke('notes:add'), updateNote:invoke('notes:update'), deleteNote:invoke('notes:delete'),
   saveSettings:invoke('settings:save'), testApi:invoke('settings:test-api'), exportData:invoke('data:export'), importData:invoke('data:import'), backup:invoke('data:backup'),
   speak:invoke('speech:generate'),startSpeech:invoke('speech:start'),cancelSpeech:invoke('speech:cancel'),warmSpeech:invoke('speech:warm'), minute:invoke('stats:minute'), fullscreen:invoke('window:fullscreen'), print:invoke('window:print'), openData:invoke('data:open'),

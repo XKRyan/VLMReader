@@ -34,3 +34,14 @@ test('vocabulary backup restores notebooks, memberships and links by document ha
   assert.equal(b.state.notebooks[0].bookIds[0],'different-id');assert.deepEqual(b.state.entries[0].notebookIds,[b.state.notebooks[0].id]);assert.equal(b.state.entries[0].card.reps,0);
   assert.equal(mergeBackup(b,JSON.parse(JSON.stringify(a.state))),0);assert.equal(b.state.notebooks.length,1);assert.equal(b.state.entries.length,1);
 });
+test('backup retains independent review abilities and a renamed cloze notebook',()=>{
+  const a=store(),group=saveNotebook(a,{name:'My sentence vocabulary',bookIds:[]});
+  group.system='cloze';a.state.entries=[reviewEntry(reviewEntry(makeEntry({text:'steady',translation:'稳定的'}),3,new Date(),'meaning'),1,new Date(),'cloze')];
+  a.state.entries[0].notebookIds=[group.id];
+  const b=store();mergeBackup(b,JSON.parse(JSON.stringify(a.state)));
+  assert.equal(b.state.notebooks[0].system,'cloze');
+  assert.equal(b.state.entries[0].reviewSkills.meaning.card.reps,1);
+  assert.equal(b.state.entries[0].reviewSkills.cloze.card.reps,1);
+  assert.equal(b.state.entries[0].reviewSkills.spelling.card.reps,0);
+  assert.deepEqual(b.state.entries[0].notebookIds,[b.state.notebooks[0].id]);
+});
