@@ -12,13 +12,13 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.5.2-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.5.3-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.2-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.3-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
@@ -26,15 +26,16 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 - 导入 PDF、EPUB、DOCX、TXT、Markdown 或 HTML；支持拖入文件、搜索、目录、阅读进度、收藏、书签与打印。PDF 原版和文字模式均连续滚动，各页自然衔接，跨页不会跳到页首；EPUB 支持滚轮翻页。
 - DOCX 保留原有荧光笔颜色、文字颜色、文字底纹、粗体、斜体、下划线、表格和嵌入图片；支持段落 / 字符样式继承及主题色。已经导入的 DOCX 直接打开即可使用，无需重新导入，也不会改动源文件。HTML / Markdown 保留文字颜色、标注及图片，导入时将同目录及子目录内引用的图片一起保存；已有 HTML / Markdown 可重新导入同一文件补全图片，不会重复建书。EPUB 与原版 PDF 保留其原始颜色和图片。PDF 文字模式重排正文，并尽量保留图片、矢量图、文字颜色和荧光笔标注，包括独立 Highlight 批注和已画进页面的色块；改变字体及字号后标注仍跟随对应文字。图片按原页渲染，保留旋转、透明度、遮罩及图内标签，邻近正文保持可选取；只在接近可见区域时提取，同一本书阅读期间切换字体或模式直接复用。已导入的 PDF 直接打开即可，无需重导入，也不会改动源文件。
-- 鼠标选中词或句子，右侧显示译文。单词默认保存释义与原句；句子默认不自动加入生词本，仍可翻译、批注或手动保存。自动收集句子和悬停查词可在设置中开启。
+- 鼠标选中词或句子，右侧显示译文；不会自动保存。点击“加入词本”后才收录释义和原句，句子也只手动保存。单一关联词本会默认选中，多个关联词本需先选择目标；也可以选择其他词本或未归类。悬停查词同样不会自动收集。
 - 选中文字后点击“添加批注”，保存高亮和自己的理解。批注侧栏支持定位原文、编辑与删除；跨重启保留，删除不改动文档内容。
 - 英汉查询使用 ECDICT，汉英查询使用 CC-CEDICT；保留完整词条与英文释义。专业词、短语或词典未收录的内容可使用 API。
 - 句子翻译在“偏好设置 → 翻译服务”填写 DeepSeek API 密钥后启用。默认模型名为 `deepseek-flash`，接口地址和模型名称可修改。密钥使用 Windows 加密存储，不会出现在资料导出文件中。
 - 底部播放按钮朗读当前页面或章节；右侧扬声器朗读所选内容。支持暂停、停止、0.50–3.00 倍连续调速并保持音高，默认自动接续下一页或章节。Kokoro 在本机生成语音，无需下载每段音频；英文数字按英文发音。阅读时后台提前准备语音，首次播放短暂缓冲，句子共享连续音轨。完成的音轨永久保存在 `data\audio`，退出或重启后直接复用；改变倍速不重新生成。停止播放后可在后台完成缓存，提前退出时已完成句子也会保留。96 kbps 单声道 MP3 约 0.7 MB / 分钟，一小时约 43 MB；完整音轨保存后去除重复的临时句子文件。
+- 左侧“查单词”支持中英查询，优先使用离线词典；未收录时由 DeepSeek 以音标、词性、释义和英文解释的固定格式补全，AI 来源明确标注。例句仅点击“生成 AI 例句”后生成，查询结果可以选择词本保存。AI 内容可能有误，可编辑校正。
 - 生词本的“添加单词”可以单独输入中英文词语，由离线词典自动补全释义，再保存可选原句，无需 API。词典未收录时可手动填写释义。
 - 生词本可以编辑完整译文、查看原句、回到来源、补译句子、暂停复习和导出 CSV/JSON。点击“管理”后显示选择框和删除按钮；勾选条目后点击“删除所选”即可批量删除；表头复选框全选当前搜索 / 筛选结果，换筛选条件会清空选择。确认后同时删除所选条目及其复习记录，取消则保留。每行及详情顶部也可单独删除。
-- “新建词本”可以分区收藏，并关联书架中的多本书。之后从关联书籍收集的新词自动归类；同一词可以属于多个词本。创建或编辑时可选择“同时收录已有生词”。管理模式可批量移入或移出词本；删除词本只移除分组，保留词条及复习记录。手动添加、CSV 导出及复习均支持当前词本。JSON 生词备份会带上词本和自动归类规则。
-- 复习时先回忆再显示答案，用“重学 / 困难 / 记得 / 轻松”评分。单词支持词义回忆、原句填空和拼写练习；句子单独支持“回忆句意”和“关键词填空”，用自己的话解释意思即可，不要求逐字背诵。填空只遮住一个词或短语，可在生词本详情指定目标，留空则自动选择关键词。复习页面可筛选单词或句子；FSRS 根据评分安排下次复习，默认目标保持率 90%。主动回忆与间隔练习有研究支持，但没有适合所有人的唯一最优方法。
+- “新建词本”可以分区收藏，并关联书架中的多本书。手动加入新词时可选择目标词本，同一词可以属于多个词本。创建或编辑时可选择“同时收录已有生词”。管理模式可批量移入或移出词本；删除词本只移除分组，保留词条及复习记录。导出和复习支持按词本筛选，JSON 备份保留词本关联。
+- 单词“句子填空”先使用可用原句，原句答对后改用 DeepSeek 新例句；没有原句时直接生成。每次新的练习优先换句，约 20% 的练习抽取旧例句，避开最近两题，优先抽到曾答错的句子。例句池每词最多保存 12 条，未作答题目重启后可继续。提交自动判断对错，正确按 FSRS 的 Good、错误按 Again 安排下次时间，不需要手动评分；空白、API 错误或保存失败不计作答。例句生成需要 DeepSeek 密钥，原句练习可离线进行。词义、拼写及整句关键词练习仍使用手动评分。FSRS 默认目标保持率 90%。
 - 四种阅读主题，每种都可独立调整主题色、界面背景、阅读底色及正文文字颜色；提供预设、色值输入、即时预览和恢复默认。应用边框、导航及底部播放器固定，只有内容区滚动。字号、行距、宽度与字体可调。偏好设置中分别选择“界面字体”和“正文字体”，可输入已安装字体的名称。DOCX、EPUB、TXT、Markdown 和 HTML 使用正文字体。PDF 顶部点击“文字模式”可修改字体和字号，同时保留可识别的图片和标注；“原版 PDF”保留原布局与原字体。文字模式无法保证复杂公式、重叠图形、表格或多栏版式完全还原，此类页面可切回原版；图片或图表中的文字保持原图字体。扫描页及没有可提取文字的页面保留完整原图，改字体、划词和朗读仍需先 OCR。设置中可即时切换简体中文 / English，语言选择会保存。
 
 “偏好设置 → 阅读外观 → 界面字号”可调导航、按钮与面板文字，范围 13–22px，默认 16px（比上一版增大约 23%），关闭后会记住。正文字号单独设置；原版 PDF 保留原字体与取词位置。
@@ -71,7 +72,7 @@ pnpm installer
 
 `pnpm installer` 使用 Windows Python 3.12 的 msilib 和 Windows Installer，将已构建的 `release/win-unpacked` 制作为 MSI 安装包，输出到 `publication`；MSI 不运行额外的 EXE 自定义安装动作。`node tests/installer-smoke.cjs --msi` 在独立安装目录验证安装、完整文件校验、应用启动、离线查词与朗读、覆盖升级和卸载保留资料；使用独立的测试快捷方式和注册项，不会修改现有阅读器资料。可通过 `VLMREADER_PYTHON` 指定 Python 3.12 路径。
 
-运行 `pnpm test` 检查词典、资料持久化、FSRS、翻译、文档格式、PDF 重排与持久语音缓存；`node tests/pdf-reflow-ui.cjs` 验证 PDF 文字模式的图片、矢量图、单双行及部分文字高亮、旋转页面、扫描页、字体和缓存复用、鼠标取词、批注跨模式 / 重启、夜读主题、连续滚动及 VLMReader 名称；`node tests/document-formatting-ui.cjs` 验证文档标注、文字颜色、图片、表格、字体与跨重启显示；`node tests/appearance-notebooks-ui.cjs` 验证配色、词本关联、分组导出与复习、悬停查词、固定界面及重启保存；`node tests/vocabulary-ui.cjs` 验证批量删除和字号，`node tests/annotations-ui.cjs` 验证手动词典添加、批注与句子默认不收集，`node tests/ui-smoke.cjs` 验证桌面功能，`node tests/reader-regression.cjs` 验证真实鼠标取词、字体与连续滚动，`node tests/speech-continuity.cjs` 验证连续音轨、停止重启、倍速和实际应用重启后的缓存复用。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py`、`scripts/create_formatting_fixtures.py` 或 `scripts/create_pdf_reflow_fixture.py` 生成（需要 reportlab、pypdf、python-docx 和 Pillow）。
+`node tests/cloze-lookup-ui.cjs` 验证自动判题、原句进度、AI 词典、按需例句、选择词本与手动划词保存。运行 `pnpm test` 检查词典、资料持久化、FSRS、翻译、文档格式、PDF 重排与持久语音缓存；`node tests/pdf-reflow-ui.cjs` 验证 PDF 文字模式的图片、矢量图、单双行及部分文字高亮、旋转页面、扫描页、字体和缓存复用、鼠标取词、批注跨模式 / 重启、夜读主题、连续滚动及 VLMReader 名称；`node tests/document-formatting-ui.cjs` 验证文档标注、文字颜色、图片、表格、字体与跨重启显示；`node tests/appearance-notebooks-ui.cjs` 验证配色、词本关联、分组导出与复习、悬停查词、固定界面及重启保存；`node tests/vocabulary-ui.cjs` 验证批量删除和字号，`node tests/annotations-ui.cjs` 验证手动词典添加、批注与句子默认不收集，`node tests/ui-smoke.cjs` 验证桌面功能，`node tests/reader-regression.cjs` 验证真实鼠标取词、字体与连续滚动，`node tests/speech-continuity.cjs` 验证连续音轨、停止重启、倍速和实际应用重启后的缓存复用。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py`、`scripts/create_formatting_fixtures.py` 或 `scripts/create_pdf_reflow_fixture.py` 生成（需要 reportlab、pypdf、python-docx 和 Pillow）。
 
 ## 许可与公开发布
 

@@ -1,7 +1,14 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {Store}=require('../electron/store.cjs'),{makeEntry,reviewEntry}=require('../electron/core.cjs');
-const {saveNotebook,collectMembership,deleteNotebook,assignEntries,mergeBackup}=require('../electron/notebooks.cjs');
+const {notebookIds,saveNotebook,collectMembership,deleteNotebook,assignEntries,mergeBackup}=require('../electron/notebooks.cjs');
 function store(){const s=new Store(fs.mkdtempSync(path.join(os.tmpdir(),'memreader-notebooks-')));s.state.books=[{id:'a',title:'A',hash:'aaa'},{id:'b',title:'B',hash:'bbb'}];return s;}
+test('explicit destination overrides source links; ambiguous sources require a choice',()=>{
+  const s=store(),a=saveNotebook(s,{name:'First',bookIds:['a']}),b=saveNotebook(s,{name:'Second',bookIds:['a']});
+  assert.throws(()=>notebookIds(s.state,{bookId:'a'}),/选择/);
+  assert.deepEqual(notebookIds(s.state,{bookId:'a',notebookIds:[b.id]}),[b.id]);
+  assert.deepEqual(notebookIds(s.state,{bookId:'a',notebookIds:[]}),[]);
+  const entry=makeEntry({text:'keep',translation:'保留',notebookIds:[a.id]});entry.notebookIds=[a.id];collectMembership(s.state,entry,{bookId:'a',notebookIds:[b.id]});assert.deepEqual(entry.notebookIds,[a.id,b.id]);
+});
 test('linked sources, existing vocabulary opt-in and one word in multiple notebooks',()=>{
   const s=store(),entry=makeEntry({text:'resilient',translation:'有韧性',bookId:'a'});s.state.entries=[entry];
   const first=saveNotebook(s,{name:'Reading',bookIds:['a'],includeExisting:false});assert.deepEqual(entry.notebookIds,[]);

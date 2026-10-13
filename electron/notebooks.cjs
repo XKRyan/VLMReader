@@ -3,7 +3,10 @@ const {normalize,makeEntry}=require('./core.cjs');
 function notebookIds(state,input){
   const explicit=input.notebookIds||[];
   if(!Array.isArray(explicit)||explicit.some(id=>typeof id!=='string'||!state.notebooks.some(book=>book.id===id)))throw Error('词本不存在');
-  return [...new Set([...explicit,...state.notebooks.filter(book=>book.bookIds.includes(input.bookId)).map(book=>book.id)])];
+  if(Object.hasOwn(input,'notebookIds'))return [...new Set(explicit)];
+  const linked=state.notebooks.filter(book=>book.bookIds.includes(input.bookId)).map(book=>book.id);
+  if(linked.length>1)throw Error('这份文档关联多个词本，请选择加入哪个词本');
+  return linked;
 }
 function collectMembership(state,entry,input){entry.notebookIds=[...new Set([...(entry.notebookIds||[]),...notebookIds(state,input)])];return entry;}
 function saveNotebook(store,input,id){
