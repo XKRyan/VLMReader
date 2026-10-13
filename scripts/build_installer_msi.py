@@ -8,12 +8,13 @@ import json
 import uuid
 import gc
 import ctypes
+import os
 from pathlib import Path
 import msilib
 from msilib import schema, sequence, text
 
 root = Path(__file__).resolve().parents[1]
-payload = root / 'release/win-unpacked'
+payload = Path(os.environ.get('VLMREADER_PACKAGE_DIR', root / 'release/win-unpacked')).resolve()
 version = json.loads((root/'package.json').read_text(encoding='utf-8'))['version']
 output = root / f'publication/VLMReader-Setup-{version}-x64.msi'
 output.parent.mkdir(exist_ok=True)

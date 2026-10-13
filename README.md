@@ -12,13 +12,13 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.5.1-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.5.2-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.1-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.5.2-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
@@ -65,7 +65,9 @@ pnpm package
 pnpm installer
 ```
 
-资源准备只需首次执行，之后复用本地文件。打包后自动校验并恢复官方 Electron 运行时字节，窗口与快捷方式使用独立应用图标。Rollup 使用官方 WASM 包，兼容限制原生构建模块的 Windows 应用控制策略。
+资源准备只需首次执行，之后复用本地文件。默认打包将白紫书本图标及 VLMReader 名称写入 EXE 文件，验证七种图标尺寸与官方运行时代码一致，不再恢复 Electron 图标。Rollup 使用官方 WASM 包。
+
+当前品牌版本未进行发布签名，启用智能应用控制的电脑可能阻止它启动。需要签名时，先运行 `pnpm package:prepare-signing`，使用受信任的代码签名证书或服务签名 `publication/signing/VLMReader.exe`，将 `VLMREADER_SIGNED_EXECUTABLE` 设为签名后的文件路径再运行 `pnpm package`；打包程序验证图标、运行时代码与签名，验证失败立即停止。`VLMREADER_REQUIRE_SIGNATURE=1` 可强制要求签名；`VLMREADER_COMPATIBILITY_EDITION=1` 可显式构建保留官方 Electron 图标的兼容版本。构建流程不修改 Windows 安全策略，也不导入自签名信任证书。
 
 `pnpm installer` 使用 Windows Python 3.12 的 msilib 和 Windows Installer，将已构建的 `release/win-unpacked` 制作为 MSI 安装包，输出到 `publication`；MSI 不运行额外的 EXE 自定义安装动作。`node tests/installer-smoke.cjs --msi` 在独立安装目录验证安装、完整文件校验、应用启动、离线查词与朗读、覆盖升级和卸载保留资料；使用独立的测试快捷方式和注册项，不会修改现有阅读器资料。可通过 `VLMREADER_PYTHON` 指定 Python 3.12 路径。
 

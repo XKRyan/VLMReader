@@ -7,6 +7,7 @@ const {_electron: electron} = require('@playwright/test');
 const {Store} = require('../electron/store.cjs');
 
 const root = path.resolve(__dirname, '..');
+const payload = path.resolve(process.env.VLMREADER_PACKAGE_DIR || path.join(root, 'release', 'win-unpacked'));
 const version = require('../package.json').version;
 let installer = path.join(root, 'publication', `VLMReader-Setup-${version}-x64.msi`);
 const target = path.join(root, 'publication', 'installer-test-' + Date.now(), 'VLMReader');
@@ -53,8 +54,8 @@ async function launch() {
   assert.equal(digest(path.join(data,'library.json')), beforeInstall);
   assert.ok(fs.existsSync(desktop)); assert.ok(fs.existsSync(menu));
   assert.match(installedVersion(), new RegExp(version.replaceAll('.', '\\.')));
-  for (const file of walk(path.join(root,'release','win-unpacked'))) {
-    assert.equal(digest(path.join(target,'release','win-unpacked',path.relative(path.join(root,'release','win-unpacked'),file))),digest(file));
+  for (const file of walk(payload)) {
+    assert.equal(digest(path.join(target,'release','win-unpacked',path.relative(payload,file))),digest(file));
   }
   console.log('Silent install, all payload hashes, user data, shortcuts and uninstall registration passed.');
   let {app,page} = await launch();
