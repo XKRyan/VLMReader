@@ -69,6 +69,7 @@ Object.assign(english,{
 '已学词形也可使用；批改检查词义、搭配和语法。':'Learned word forms are allowed. Feedback checks meaning, collocation and grammar.',
 '尚未安排':'Not scheduled'
 });
+Object.assign(english,{'复习评分':'Review rating','请根据语义回忆完整词形':'Recall the exact word form from its meaning','Enter 提交答案 · F1 / Alt+H 提示':'Enter to submit · F1 / Alt+H for hints','Enter 显示答案／继续 · 方向键选择 · 1–4 评分':'Enter to reveal/continue · Arrow keys to choose · 1–4 to rate'});
 export function t(value:string):string{
   if(language==='zh')return value;
   if(english[value]!==undefined)return english[value];

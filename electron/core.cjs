@@ -44,6 +44,7 @@ function makeEntry(input, now = new Date()) {
     kind: input.kind || (isChinese ? (text.length <= 6 && !/[。！？]/.test(text) ? 'word' : 'sentence') : (/^[\p{L}\p{M}'’-]+$/u.test(text) ? 'word' : 'sentence')),
     context: normalize(input.context).slice(0,12000), bookId: input.bookId || '', bookTitle: input.bookTitle || '', location: input.location || '',
     translation: input.translation || '', definition: input.definition || '', phonetic: input.phonetic || '', dictionaryWord: input.dictionaryWord || '',
+    ...(Array.isArray(input.cueWords)?{cueWords:input.cueWords.filter(word=>typeof word==='string'&&word.length<=100).slice(0,32)}:{}),
     source: input.source || '', explanation:input.explanation||'',contextTranslation:input.contextTranslation||'',status: input.translation ? 'ready' : 'pending',
     createdAt: now.toISOString(), updatedAt: now.toISOString(), encounters: 1, contexts: [], note: '', suspended: false,
     card: createEmptyCard(now), history: [], notebookIds:[] };

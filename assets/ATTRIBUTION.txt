@@ -3,6 +3,12 @@ VLMReader — third-party resources
 ECDICT: https://github.com/skywind3000/ECDICT
 License: MIT (see ECDICT-LICENSE.txt). The complete imported entry is retained without abbreviation.
 
+Open English WordNet 2025: https://en-word.net/
+Creators: Princeton WordNet and the Open English WordNet community.
+License: Creative Commons Attribution 4.0.
+Source, full license and conversion notice: wordnet/ATTRIBUTION.txt, wordnet/LICENSE.md.
+Converted to SQLite; definitions grouped by part of speech and combined with ECDICT.
+
 CC-CEDICT: https://www.mdbg.net/chinese/dictionary?page=cedict
 License: Creative Commons Attribution-ShareAlike 4.0.
 License text: https://creativecommons.org/licenses/by-sa/4.0/

@@ -4,6 +4,7 @@ const {targetPattern,validateSentence,generateSentence}=require('./review-exampl
 const {judgeAnswer,plausibleAnswer}=require('./answer-judge.cjs');
 const {isUnreviewed}=require('../shared/review-policy.mjs');
 const {family,canVary}=require('./word-forms.cjs');
+const {maskCue,semanticDefinition}=require('../shared/review-cues.mjs');
 const answerKey=text=>normalize(text).replace(/[‘’]/g,"'").replace(/[“”]/g,'"').toLocaleLowerCase();
 const fingerprint=entry=>crypto.createHash('sha256').update(JSON.stringify([entry.text,entry.translation,entry.language,entry.kind,entry.context])).digest('hex');
 function maskSentence(sentence,entry){
@@ -40,17 +41,18 @@ function createClozeService(store,getKey,options={}){
     const entry=find(id),snapshot=fingerprint(entry),state=stateFor(entry);
     if(state.active?.fingerprint===snapshot&&maskSentence(state.active.sentence,{...entry,text:state.active.target})){
       if(entry.language!=='en')return {entry,exercise:state.active};
-      const found=!entry.definition&&options.lookup?await options.lookup(entry.text).catch(()=>null):null,definition=entry.definition||found?.definition||'',current=find(id),active=current.clozePractice?.active;
+      const found=options.lookup?await Promise.resolve(options.lookup(entry.text)).catch(()=>null):null,definition=semanticDefinition(entry.definition)||found?.definition||'',current=find(id),active=current.clozePractice?.active;
       if(fingerprint(current)!==snapshot||active?.id!==state.active.id)throw Error('词条已改变，请重新加载');
-      const hintStages=active.hints?active.hintStages:definition?['english','meaning','initial']:active.hintStages;
-      if(current.definition===definition&&JSON.stringify(active.hintStages)===JSON.stringify(hintStages))return {entry:current,exercise:active};
-      const exercise={...active,...(hintStages?{hintStages}:{})},next={...current,definition,clozePractice:{...current.clozePractice,active:exercise}};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?next:item)});return {entry:next,exercise};
+      const englishHint=maskCue(definition,[entry.text,active.target,...(entry.cueWords||[]),...(found?.cueWords||[])]);
+      const hintStages=active.hints?active.hintStages:englishHint?['english','meaning','initial']:['meaning','initial'];
+      if(current.definition===definition&&active.englishHint===englishHint&&JSON.stringify(active.hintStages)===JSON.stringify(hintStages))return {entry:current,exercise:active};
+      const exercise={...active,englishHint,...(hintStages?{hintStages}:{})},next={...current,definition,clozePractice:{...current.clozePractice,active:exercise}};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?next:item)});return {entry:next,exercise};
     }
     if(pending.has(id))return pending.get(id);
     const request=(async()=>{
       let example,source,masked;
       const found=options.lookup?await Promise.resolve(options.lookup(entry.text)).catch(()=>null):null;
-      const forms=family(found,entry),definition=entry.definition?.trim()||found?.definition||'',varied=canVary(entry,now());
+      const forms=family(found,entry),definition=semanticDefinition(entry.definition)||found?.definition||'',varied=canVary(entry,now());
       state.examples=state.examples.filter(example=>example.source!=='library'||store.state.books.some(book=>book.id===example.bookId));
       const original=originalSentence(entry);
       if(original&&state.attempts===0&&(masked=maskSentence(original,entry))){
@@ -79,8 +81,9 @@ function createClozeService(store,getKey,options={}){
       if(!masked)throw Error('这个句子无法用于填空，请重试');
       const current=find(id);
       if(fingerprint(current)!==snapshot)throw Error('词条已改变，请重新生成例句');
-      const hintStages=entry.language==='en'&&definition.trim()?['english','meaning','initial']:['meaning','initial'];
-      const exercise={id:crypto.randomUUID(),sentence:example.sentence,translation:example.translation,target:example.target||entry.text,masked,source,exampleId:example.id||'',fingerprint:snapshot,createdAt:now().toISOString(),repeated:(example.shown||0)>0,hints:0,hintStages,alternatives:example.alternatives||[],family:[entry.text,...forms.map(item=>item.word)],...(source==='library'?{bookId:example.bookId,bookTitle:example.bookTitle,location:example.location}:{})};
+      const englishHint=maskCue(definition,[entry.text,example.target,...(entry.cueWords||[]),...(found?.cueWords||[]),...forms.map(form=>form.word)]);
+      const hintStages=entry.language==='en'&&englishHint?['english','meaning','initial']:['meaning','initial'];
+      const exercise={id:crypto.randomUUID(),sentence:example.sentence,translation:example.translation,target:example.target||entry.text,masked,source,exampleId:example.id||'',fingerprint:snapshot,createdAt:now().toISOString(),repeated:(example.shown||0)>0,hints:0,hintStages,englishHint,alternatives:example.alternatives||[],family:[entry.text,...forms.map(item=>item.word)],...(source==='library'?{bookId:example.bookId,bookTitle:example.bookTitle,location:example.location}:{})};
       const next={...current,definition:current.definition||definition,clozePractice:{...state,active:exercise}};
       store.replaceState({...store.state,entries:store.state.entries.map(e=>e.id===id?next:e)});
       return {entry:next,exercise};

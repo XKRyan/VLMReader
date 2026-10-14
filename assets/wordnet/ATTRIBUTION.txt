@@ -1,0 +1,6 @@
+Open English WordNet 2025
+Source: https://en-word.net/static/english-wordnet-2025.xml.gz
+Project: https://github.com/globalwordnet/english-wordnet
+Creators: Princeton WordNet and the Open English WordNet community.
+License: Creative Commons Attribution 4.0, https://creativecommons.org/licenses/by/4.0/
+VLMReader converts the source into SQLite and groups definitions by part of speech; lexical definitions remain unchanged.

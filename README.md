@@ -13,13 +13,13 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.0-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.1-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.0-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.1-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
@@ -29,7 +29,7 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 - DOCX 保留原有荧光笔颜色、文字颜色、文字底纹、粗体、斜体、下划线、表格和嵌入图片；支持段落 / 字符样式继承及主题色。已经导入的 DOCX 直接打开即可使用，无需重新导入，也不会改动源文件。HTML / Markdown 保留文字颜色、标注及图片，导入时将同目录及子目录内引用的图片一起保存；已有 HTML / Markdown 可重新导入同一文件补全图片，不会重复建书。EPUB 与原版 PDF 保留其原始颜色和图片。PDF 文字模式重排正文，并尽量保留图片、矢量图、文字颜色和荧光笔标注，包括独立 Highlight 批注和已画进页面的色块；改变字体及字号后标注仍跟随对应文字。图片按原页渲染，保留旋转、透明度、遮罩及图内标签，邻近正文保持可选取；只在接近可见区域时提取，同一本书阅读期间切换字体或模式直接复用。已导入的 PDF 直接打开即可，无需重导入，也不会改动源文件。
 - 鼠标选中词或句子，右侧显示译文；不会自动保存。点击“加入词本”后才收录释义和原句，句子也只手动保存。单一关联词本会默认选中，多个关联词本需先选择目标；也可以选择其他词本或未归类。悬停查词同样不会自动收集。
 - 选中文字后点击“添加批注”，保存高亮和自己的理解。批注侧栏支持定位原文、编辑与删除；跨重启保留，删除不改动文档内容。
-- 英汉查询使用 ECDICT，汉英查询使用 CC-CEDICT；保留完整词条与英文释义。专业词、短语或词典未收录的内容可使用 API。
+- 英汉查询使用 ECDICT，汉英查询使用 CC-CEDICT；Open English WordNet 补充英英释义。变形词自动结合原形词义，并保留其独立的名词、形容词等用法。专业词、短语或词典未收录的内容可使用 API。
 - 句子翻译在“偏好设置 → 翻译服务”填写兼容 OpenAI Chat Completions 的 AI API 密钥后启用。默认模型名为 `deepseek-flash`，接口地址和模型名称可修改。密钥使用 Windows 加密存储，不会出现在资料导出文件中。
 - 底部播放按钮朗读当前页面或章节；右侧扬声器朗读所选内容。支持暂停、停止、0.50–3.00 倍连续调速并保持音高，默认自动接续下一页或章节。Kokoro 在本机生成语音，无需下载每段音频；英文数字按英文发音。阅读时后台提前准备语音，首次播放短暂缓冲，句子共享连续音轨。完成的音轨永久保存在 `data\audio`，退出或重启后直接复用；改变倍速不重新生成。停止播放后可在后台完成缓存，提前退出时已完成句子也会保留。96 kbps 单声道 MP3 约 0.7 MB / 分钟，一小时约 43 MB；完整音轨保存后去除重复的临时句子文件。
 - 左侧“查单词”支持中英查询，优先使用离线词典；未收录时由 AI 以音标、词性、释义和英文解释的固定格式补全，AI 来源明确标注。例句仅点击“生成 AI 例句”后生成，查询结果可以选择词本保存。AI 内容可能有误，可编辑校正。
@@ -38,6 +38,7 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 - “新建词本”可以分区收藏，并关联书架中的多本书。手动加入新词时可选择目标词本，同一词可以属于多个词本。创建或编辑时可选择“同时收录已有生词”。管理模式可批量移入或移出词本；删除词本只移除分组，保留词条及复习记录。导出和复习支持按词本筛选，JSON 备份保留词本关联。
 - 单词复习使用一个混合队列，可开启词义、句子填空、拼写以及可选的 AI 造句。四种能力分别保存 FSRS 卡片：看懂词义不会让拼写或用法自动变成已掌握。到期和重学优先，未练能力逐步引入，各能力之间保留至少 20 分钟的提示间隔，自己的短时重学仍按卡片安排。默认开启前三种，造句需要配置 AI 后手动开启。旧进度只迁入实际练过的能力，新能力从零开始；默认目标保持率为 90%。
 - 句子填空首次使用可用原句，之后优先换成书籍例句或 AI 新例句；填错或用提示后也换语境，不反复背同一句。后台为书架建立持久文本索引，新词自动寻找现有 PDF、DOCX、EPUB、TXT、HTML、Markdown 中的完整例句并保存来源，不修改文档，也不调用 AI；新增、移除、重新导入文档时更新索引。找不到可用的新句再生成。约 20% 可复现旧例句，排除最近两句，并提高曾答错例句的抽取权重；每词最多保留 12 句。
+- 全键盘复习：输入题准备好后自动聚焦，查词弹窗关闭后恢复焦点。Enter 显示答案、提交填空或继续；F1 / Alt+H 显示填空提示，词义与拼写题则揭晓答案；方向键选择评分、Enter 确认，也可直接按 1–4 评分。造句用 Ctrl+Enter 提交。
 - 填空提示按“英英释义 → 中文 → 首字母 → 揭晓”增加；离线词典可以补齐旧词条的英文解释，没有英文解释时跳过该级。独立答对按 Good，答错、使用提示后答对或揭晓按 Again，不把提示后的成功计作独立掌握。有效替代词或上下文不足以排除的其他合理答案不计对错，10 分钟后补测目标词；词义不同本身不能证明句子不合逻辑。错误词形按对应练习重新安排。精确答案、无效输入、词形检查及已缓存判定在本地完成；必要时才调用简短 AI 判定。API、保存失败或空白不计作答。
 - 复习例句里的单词支持悬停反馈、点击查词，不做整段划词翻译；点击“加入词本”才收录，默认使用“句子填空”词本，也能选择其他词本。文档阅读仍保留划词和句子翻译。查词展示完整中英释义、离线词形变化；同／近义词和派生词由 AI 按需补充并缓存，附词义和搭配差别，不合并各词的学习进度。初学保持目标词形；跨日且至少两次无提示填空成功、该能力进入复习阶段后，才少量加入时态、复数等已知词形。派生词单独学习。
 - 可选“造句练习”让用户写一个包含目标词的完整句子，由 AI 检查词义、搭配和语法并给出简短修改建议，使用独立的用法卡片；不会因句子复杂而奖励，也不因小标点错误判不会。Ctrl+Enter 提交，批改后 Enter 继续；没有有效 AI 配置时不安排该题型。
@@ -65,6 +66,7 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 ```powershell
 pnpm install
 python scripts/prepare_assets.py
+python scripts/prepare_wordnet.py
 node scripts/prepare_runtime.cjs
 pnpm build
 pnpm start
@@ -78,7 +80,7 @@ pnpm installer
 
 `pnpm installer` 使用 Windows Python 3.12 的 msilib 和 Windows Installer，将已构建的 `release/win-unpacked` 制作为 MSI 安装包，输出到 `publication`；MSI 不运行额外的 EXE 自定义安装动作。`node tests/installer-smoke.cjs --msi` 在独立安装目录验证安装、完整文件校验、应用启动、离线查词与朗读、覆盖升级和卸载保留资料；使用独立的测试快捷方式和注册项，不会修改现有阅读器资料。可通过 `VLMREADER_PYTHON` 指定 Python 3.12 路径。
 
-`node tests/review-keyboard-ui.cjs` 验证实际 Enter / Ctrl+Enter、重复按键、弹窗隔离、四级提示、独立造句卡、背景例句、考试词书和双语界面。`node tests/upgrade-ui.cjs` 验证分页与局部滚动、未复习词本实时更新、独立题型设置、四级提示、同义词中性判定、填空查词及专用词本、按钮居中、即时配色与重启保存、中英文及小窗口大字号。`node tests/cloze-lookup-ui.cjs` 验证自动判题、原句进度、AI 词典、按需例句、选择词本与手动划词保存。运行 `pnpm test` 检查词典、资料持久化、四项独立 FSRS 与迁移、词形与关系缓存、造句事务、持久书籍索引、五种词书格式、翻译、文档格式、PDF 重排与持久语音缓存；其他文档、批注、连续滚动、语音及安装测试位于 `tests`。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py`、`scripts/create_formatting_fixtures.py` 或 `scripts/create_pdf_reflow_fixture.py` 生成（需要 reportlab、pypdf、python-docx 和 Pillow）。
+`node tests/review-accessibility-ui.cjs` 验证变形词旧数据修复、输入框聚焦、方向键选评分、提示快捷键、弹窗键盘隔离和异步造句焦点。`node tests/review-keyboard-ui.cjs` 验证实际 Enter / Ctrl+Enter、重复按键、弹窗隔离、四级提示、独立造句卡、背景例句、考试词书和双语界面。`node tests/upgrade-ui.cjs` 验证分页与局部滚动、未复习词本实时更新、独立题型设置、四级提示、同义词中性判定、填空查词及专用词本、按钮居中、即时配色与重启保存、中英文及小窗口大字号。`node tests/cloze-lookup-ui.cjs` 验证自动判题、原句进度、AI 词典、按需例句、选择词本与手动划词保存。运行 `pnpm test` 检查词典、资料持久化、四项独立 FSRS 与迁移、词形与关系缓存、造句事务、持久书籍索引、五种词书格式、翻译、文档格式、PDF 重排与持久语音缓存；其他文档、批注、连续滚动、语音及安装测试位于 `tests`。界面测试使用独立资料夹，不会写入个人资料；可设置 `MEMREADER_EXE` 测试打包程序。合成测试文档可通过 `scripts/create_fixtures.py`、`scripts/create_formatting_fixtures.py` 或 `scripts/create_pdf_reflow_fixture.py` 生成（需要 reportlab、pypdf、python-docx 和 Pillow）。
 
 ## 许可与公开发布
 

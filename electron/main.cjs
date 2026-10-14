@@ -28,6 +28,9 @@ app.setPath('userData',path.join(dataDir,'runtime'));
 if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
 const dictionary=new Dictionary(assets);
+const {repairDictionaryEntries}=require('./dictionary-policy.cjs');
+let dictionaryRepair;
+const ensureDictionaryRepair=()=>dictionaryRepair||=(repairDictionaryEntries(store,dictionary).catch(error=>{dictionaryRepair=null;throw error;}));
 const libraryExamples=new LibraryExamples(store,assets,()=>main?.webContents.send('entries:changed'));
 const wordDetails=createWordDetails(dictionary,dataDir,()=>store.state.settings,getKey);
 const wordbooks=createWordbookService(store,dictionary,assets,()=>libraryExamples.queue());
@@ -77,7 +80,7 @@ app.whenReady().then(async()=>{
   updateChrome();
   main.webContents.on('before-input-event',(event,input)=>{if(input.type!=='keyDown')return;if((input.control||input.meta)&&input.key.toLowerCase()==='o'){event.preventDefault();main.webContents.send('import-request');}if(input.key==='F11'){event.preventDefault();main.setFullScreen(!main.isFullScreen());}});
   const handle=(channel,fn)=>ipcMain.handle(channel,(_event,...args)=>fn(...args));
-  handle('boot',()=>safeState());
+  handle('boot',async()=>{await ensureDictionaryRepair();return safeState();});
   handle('books:import',importBooks);
   handle('books:read',async id=>{
     const b=bookById(id);b.lastRead=new Date().toISOString();store.save();
@@ -127,7 +130,7 @@ app.whenReady().then(async()=>{
     // Another lookup can finish while the dictionary is loading. Recheck before insertion.
     e=store.state.entries.find(entry=>entry.text.toLocaleLowerCase()===text.toLocaleLowerCase());if(e)return encounter(e);
     e=withReviewSkills(makeEntry(input));
-    if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
+    if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.cueWords=found.cueWords;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
     collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();libraryExamples.queue();return e;
   });
   handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});

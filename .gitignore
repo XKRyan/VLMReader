@@ -22,3 +22,6 @@ tests/*/
 tests/fixtures/*.wav
 
 assets/*-v*.ico
+
+assets/wordnet/wordnet.sqlite
+assets/wordnet/wordnet.building
