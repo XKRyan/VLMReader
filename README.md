@@ -13,13 +13,13 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.3-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.4-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.3-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.4-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
