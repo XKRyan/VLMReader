@@ -24,7 +24,7 @@ export interface WordbookPreview {token:string;name:string;description:string;co
 export interface WordbookImport {notebook:Notebook;added:number;existing:number;pending:number;total:number}
 export interface ReaderMeta {index:number;count:number;toc:{label:string;href:string;depth?:number}[];scanned?:boolean}
 export interface SearchHit {label:string;location:string|number;excerpt:string}
-export interface ReaderControl {next:()=>void;prev:()=>void;go:(where:string|number)=>void;search:(q:string)=>Promise<SearchHit[]>;getText:()=>string;nextText:()=>Promise<string|null>;peekNextText?:()=>Promise<string|null>;highlight:(mark:Mark)=>void;locate:(mark:Mark)=>void;selectSentence:()=>void}
+export interface ReaderControl {next:()=>void;prev:()=>void;go:(where:string|number)=>void;search:(q:string)=>Promise<SearchHit[]>;getText:()=>string;nextText:()=>Promise<string|null>;peekNextText?:()=>Promise<string|null>;highlight:(mark:Mark)=>void;locate:(mark:Mark)=>void}
 export interface SpeechEvent {id:string;type:'chunk'|'end'|'error'|'cue';data?:string;duration?:number;text?:string;start?:number;error?:string}
 export interface MemAPI {
   dictionaryRich:(word:string,generate?:boolean)=>Promise<RichDictionary|null>;dictionaries:()=>Promise<CustomDictionary[]>;previewDictionary:(file?:string)=>Promise<DictionaryPreview|null>;importDictionary:(token:string,name:string)=>Promise<CustomDictionary>;discardDictionary:(token:string)=>Promise<boolean>;toggleDictionary:(id:string,enabled:boolean)=>Promise<boolean>;deleteDictionary:(id:string)=>Promise<boolean>;personalDictionary:()=>Promise<DictionaryEntry[]>;saveDictionaryWord:(entry:Partial<DictionaryEntry>,oldWord?:string)=>Promise<DictionaryEntry>;deleteDictionaryWord:(word:string)=>Promise<boolean>;

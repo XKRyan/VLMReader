@@ -2,7 +2,7 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import type {Book,Mark,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
 import {annotationRange,rangeAtPoint} from './annotations';
-import {selectionFromDoc,selectWholeSentence} from './selection';
+import {selectionFromDoc} from './selection';
 import {paintHighlights,clearHighlights} from './highlights';
 import {installPdfDragSelection} from './pdfSelection';
 import {fontStack} from './fonts';
@@ -42,10 +42,9 @@ export default function PdfDocument(props:Props){
   useEffect(()=>{paintNotes();},[props.notes]);
   useEffect(()=>{const surface=props.surface.current;if(!surface)return;let frame=0,timer:ReturnType<typeof setTimeout>|undefined;const scroll=()=>{cancelAnimationFrame(frame);clearTimeout(timer);timer=setTimeout(()=>{frame=requestAnimationFrame(report);},100);};surface.addEventListener('scroll',scroll);return()=>{surface.removeEventListener('scroll',scroll);cancelAnimationFrame(frame);clearTimeout(timer);};},[pages.length,props.doc]);
   useEffect(()=>{props.control.current={prev:()=>go(Math.max(1,active.current-1)),next:()=>go(Math.min(props.doc.numPages,active.current+1)),go,getText:()=>plainTexts.current.get(active.current)||'',
-    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,selectSentence,locate,
+    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,locate,
     search:async query=>{const result=[];for(let index=1;index<=props.doc.numPages;index++){const text=await pageText(index),at=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());if(at>=0)result.push({label:t('第')+' '+index+' '+t('页'),location:index,excerpt:text.slice(Math.max(0,at-65),at+150)});if(result.length>=80)break;}return result;}};return()=>{props.control.current=null;};},[pages.length,props.doc]);
   useEffect(()=>root.current?installPdfDragSelection(root.current):undefined,[props.doc,props.settings.pdfTextMode]);
-  function selectSentence(){if(selectWholeSentence(document))select();}
   function select(){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
     if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);return;}
     const info=selectionFromDoc(document,element.textContent||'',Number(element.dataset.pdfPage));if(info)current.current.onSelection(info);
