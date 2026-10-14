@@ -2,7 +2,9 @@ import {useEffect,useMemo,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import type {Book,Mark,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
 import {annotationRange,rangeAtPoint} from './annotations';
-import {selectionFromDoc} from './selection';
+import {selectionFromDoc,selectWholeSentence} from './selection';
+import {paintHighlights,clearHighlights} from './highlights';
+import {installPdfDragSelection} from './pdfSelection';
 import {fontStack} from './fonts';
 import {t} from './i18n';
 import {buildPdfReflow,renderPdfFigures,type PdfReflow} from './pdfReflow';
@@ -26,13 +28,13 @@ export default function PdfDocument(props:Props){
   }
   function paintNotes(){
     const next=new Map<string,Range>();for(const note of current.current.notes){const page=pageElement(Math.floor(Number(note.location))),body=page?.querySelector('[data-annotation-root]');if(body){const range=annotationRange(body,note);if(range)next.set(note.id,range);}}
-    ranges.current=next;CSS.highlights.set('memreader-notes',new Highlight(...next.values()));paintSpeech();
+    ranges.current=next;paintHighlights(next,current.current.notes);paintSpeech();
     if(pendingNote.current&&next.has(pendingNote.current.id)){const note=pendingNote.current;pendingNote.current=null;locate(note);}
   }
   function paintSpeech(){const body=pageElement(active.current)?.querySelector('[data-annotation-root]'),text=current.current.speechText.trim(),range=body&&text?annotationRange(body,{text}):null;if(range)CSS.highlights.set('memreader-speech',new Highlight(range));else CSS.highlights.delete('memreader-speech');}
   useEffect(()=>{paintSpeech();},[props.speechText]);
   function locate(note:Mark){const surface=props.surface.current,range=ranges.current.get(note.id);if(surface&&range?.getClientRects().length){surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}else{pendingNote.current=note;go(note.location);}}
-  useEffect(()=>{let alive=true;setLoading(true);void (async()=>{const result:pdfjs.PDFPageProxy[]=[];for(let at=1;at<=props.doc.numPages;at+=16){const batch=await Promise.all(Array.from({length:Math.min(16,props.doc.numPages-at+1)},(_,i)=>props.doc.getPage(at+i)));result.push(...batch);}if(alive){setPages(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;CSS.highlights.delete('memreader-notes');CSS.highlights.delete('memreader-speech');};},[props.doc]);
+  useEffect(()=>{let alive=true;setLoading(true);void (async()=>{const result:pdfjs.PDFPageProxy[]=[];for(let at=1;at<=props.doc.numPages;at+=16){const batch=await Promise.all(Array.from({length:Math.min(16,props.doc.numPages-at+1)},(_,i)=>props.doc.getPage(at+i)));result.push(...batch);}if(alive){setPages(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;clearHighlights();CSS.highlights.delete('memreader-speech');};},[props.doc]);
   useEffect(()=>{const surface=props.surface.current;if(!surface)return;const resize=new ResizeObserver(()=>setWidth(Math.min(surface.clientWidth-64,current.current.settings.contentWidth+180)));resize.observe(surface);return()=>resize.disconnect();},[props.doc,props.surface]);
   useEffect(()=>{const surface=props.surface.current;if(surface)setWidth(Math.min(surface.clientWidth-64,props.settings.contentWidth+180));},[props.settings.contentWidth]);
   useEffect(()=>{let alive=true;if(!props.settings.pdfTextMode){setTexts(null);setLoading(!pages.length);return;}setLoading(true);void (async()=>{const result:Content[]=[];for(let at=1;at<=props.doc.numPages;at+=8){const batch=await Promise.all(Array.from({length:Math.min(8,props.doc.numPages-at+1)},(_,i)=>getContent(at+i)));result.push(...batch);}if(alive){setTexts(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;};},[props.settings.pdfTextMode,props.doc]);
@@ -40,8 +42,10 @@ export default function PdfDocument(props:Props){
   useEffect(()=>{paintNotes();},[props.notes]);
   useEffect(()=>{const surface=props.surface.current;if(!surface)return;let frame=0,timer:ReturnType<typeof setTimeout>|undefined;const scroll=()=>{cancelAnimationFrame(frame);clearTimeout(timer);timer=setTimeout(()=>{frame=requestAnimationFrame(report);},100);};surface.addEventListener('scroll',scroll);return()=>{surface.removeEventListener('scroll',scroll);cancelAnimationFrame(frame);clearTimeout(timer);};},[pages.length,props.doc]);
   useEffect(()=>{props.control.current={prev:()=>go(Math.max(1,active.current-1)),next:()=>go(Math.min(props.doc.numPages,active.current+1)),go,getText:()=>plainTexts.current.get(active.current)||'',
-    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,locate,
+    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,selectSentence,locate,
     search:async query=>{const result=[];for(let index=1;index<=props.doc.numPages;index++){const text=await pageText(index),at=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());if(at>=0)result.push({label:t('第')+' '+index+' '+t('页'),location:index,excerpt:text.slice(Math.max(0,at-65),at+150)});if(result.length>=80)break;}return result;}};return()=>{props.control.current=null;};},[pages.length,props.doc]);
+  useEffect(()=>root.current?installPdfDragSelection(root.current):undefined,[props.doc,props.settings.pdfTextMode]);
+  function selectSentence(){if(selectWholeSentence(document))select();}
   function select(){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
     if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);return;}
     const info=selectionFromDoc(document,element.textContent||'',Number(element.dataset.pdfPage));if(info)current.current.onSelection(info);

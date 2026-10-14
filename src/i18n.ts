@@ -148,3 +148,5 @@ export function t(value:string):string{
   const key=value.trim();if(english[key]!==undefined)return value.slice(0,value.indexOf(key))+english[key]+value.slice(value.indexOf(key)+key.length);
   return value;
 }
+
+Object.assign(english,{'高亮颜色':'Highlight color','黄色':'Yellow','绿色':'Green','蓝色':'Blue','粉色':'Pink','紫色':'Purple','主题色':'Theme color','选择高亮颜色':'Choose highlight color','选整句':'Whole sentence','选整句 Alt+S':'Whole sentence Alt+S','高亮颜色无效':'Invalid highlight color'});

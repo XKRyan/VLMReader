@@ -121,3 +121,29 @@ html,body,#root{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 .modal.dictionary-manager>.dictionary-manager-scroll{display:block;flex:1 1 auto;margin:0;min-width:0;justify-content:initial}
 
 .personal-dictionary-row small{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+
+/* Annotation controls remain inside narrow panels at every supported UI size. */
+.annotation-selection-actions{display:grid!important;grid-template-columns:1fr;gap:8px}
+.annotation-selection-actions>button,.annotation-editor-actions>button{min-width:0;justify-content:center;text-align:center;white-space:normal;overflow-wrap:anywhere}
+.annotation-editor-actions{flex-wrap:wrap}
+.annotation-editor-actions>small{flex-basis:100%;margin-right:0}
+.annotation-heading>button{white-space:normal}
+.annotation-selection,.annotation-editor,.note-card{min-width:0;overflow-wrap:anywhere}
+.highlight-palette{display:flex!important;flex-direction:column;align-items:flex-start;gap:8px;margin:12px 0 15px}
+.highlight-palette>span{color:var(--muted);font-size:calc(10px * var(--ui-scale))}
+.highlight-palette>div{display:flex;flex-wrap:wrap;gap:8px}
+.highlight-palette button{display:grid;place-items:center;width:27px;height:27px;flex:none;border-radius:50%;color:#273044;border:1px solid #0002;padding:0;transition:transform .12s}
+.highlight-palette button:hover{transform:scale(1.08)}
+.highlight-palette button[aria-pressed=true]{outline:2px solid var(--text);outline-offset:2px}
+.highlight-chooser{position:relative}
+.highlight-chooser>button{display:grid;place-items:center;width:32px;height:34px;border-radius:7px}
+.highlight-chooser>button>i{width:16px;height:16px;border-radius:50%;border:1px solid #0002}
+.highlight-chooser>.highlight-palette{position:absolute;bottom:calc(100% + 12px);left:0;width:225px;max-width:calc(100vw - 32px);margin:0;padding:15px;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 30px #0002;z-index:2}
+.reader-selection-actions{white-space:normal;flex-wrap:wrap;justify-content:center;width:max-content}
+.reader-selection-actions>button{flex:none;text-align:center;white-space:nowrap}
+.reader-selection-actions>span{align-self:stretch}
+::highlight(vlmreader-note-yellow){background:#f5ce4f55;color:inherit}
+::highlight(vlmreader-note-green){background:#77bb8a55;color:inherit}
+::highlight(vlmreader-note-blue){background:#78afec55;color:inherit}
+::highlight(vlmreader-note-pink){background:#ed97b955;color:inherit}
+::highlight(vlmreader-note-purple){background:#b399ec55;color:inherit}

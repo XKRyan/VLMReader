@@ -8,7 +8,7 @@ const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
 const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,moveEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
 const {createRichDictionary}=require('./dictionary-rich.cjs');
-const {saveAnnotation,updateAnnotation,deleteAnnotation}=require('./annotations.cjs');
+const {saveAnnotation,updateAnnotation,deleteAnnotation,validateColor}=require('./annotations.cjs');
 const {createWordbookService}=require('./wordbooks.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
 const {REVIEW_METHODS,isUnreviewed}=require('../shared/review-policy.mjs');
@@ -170,6 +170,7 @@ app.whenReady().then(async()=>{
   handle('settings:save',input=>{
     const updates={...input};
     if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
+    if('annotationColor' in updates)validateColor(updates.annotationColor);
     if('colorThemes' in updates)updates.colorThemes=sanitizeColorThemes(updates.colorThemes,true);
     if('uiFontSize' in updates && (!Number.isInteger(updates.uiFontSize)||updates.uiFontSize<13||updates.uiFontSize>22))throw Error('界面字号需为 13–22px');
     if('reviewMethods' in updates&&(!Array.isArray(updates.reviewMethods)||!updates.reviewMethods.length||updates.reviewMethods.some(mode=>!REVIEW_METHODS.includes(mode))))throw Error('至少开启一种有效的复习方式');
