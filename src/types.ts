@@ -10,7 +10,11 @@ export interface Settings {theme:'paper'|'white'|'sage'|'night';colorThemes:Part
 export interface Notebook {id:string;name:string;bookIds:string[];createdAt:string;system?:'cloze'}
 export interface State {books:Book[];entries:Entry[];notebooks:Notebook[];bookmarks:Mark[];notes:Mark[];settings:Settings;stats:{minutes:number;reviews:ReviewRecord[]};dataDir:string;dictionaryInfo:{enCount:number;zhCount:number};ttsReady:boolean}
 export interface SelectionInfo {text:string;context:string;location:string|number;cfi?:string;start?:number;kind?:'word'|'sentence'}
-export interface DictionaryEntry {word:string;phonetic:string;definition:string;translation:string;source:string;tags:string;exchange:string;original?:string}
+export interface DictionaryExample {text:string;translation:string;source?:string}
+export interface DictionaryEntry {word:string;phonetic:string;definition:string;translation:string;source:string;tags:string;exchange:string;original?:string;examples?:DictionaryExample[];collocations?:DictionaryExample[];sections?:DictionaryEntry[]}
+export interface CustomDictionary {id:string;name:string;count:number;enabled:boolean;editable:boolean}
+export interface DictionaryPreview {token:string;name:string;count:number;duplicates:number;sample:{word:string;translation:string}[]}
+export interface RichDictionary {overview:string;professional:{field:string;meaning:string;usage:string}[];collocations:{phrase:string;translation:string;example:string}[];cached:boolean}
 export interface WordRelations {lemma:string;forms:{word:string;code:string;label:string}[];synonyms:{word:string;pos:string;meaning:string;note:string}[];derivations:{word:string;pos:string;meaning:string;note:string}[];cached:boolean}
 export interface ProductionExercise {id:string;fingerprint:string;draft:string;allowedWords?:string[]}
 export interface ProductionResult {exerciseId:string;sentence:string;rating:number;feedback:string;corrected:string;due:string;record:ReviewRecord}
@@ -22,10 +26,11 @@ export interface SearchHit {label:string;location:string|number;excerpt:string}
 export interface ReaderControl {next:()=>void;prev:()=>void;go:(where:string|number)=>void;search:(q:string)=>Promise<SearchHit[]>;getText:()=>string;nextText:()=>Promise<string|null>;peekNextText?:()=>Promise<string|null>;highlight:(mark:Mark)=>void;locate:(mark:Mark)=>void}
 export interface SpeechEvent {id:string;type:'chunk'|'end'|'error'|'cue';data?:string;duration?:number;text?:string;start?:number;error?:string}
 export interface MemAPI {
+  dictionaryRich:(word:string,generate?:boolean)=>Promise<RichDictionary|null>;dictionaries:()=>Promise<CustomDictionary[]>;previewDictionary:(file?:string)=>Promise<DictionaryPreview|null>;importDictionary:(token:string,name:string)=>Promise<CustomDictionary>;discardDictionary:(token:string)=>Promise<boolean>;toggleDictionary:(id:string,enabled:boolean)=>Promise<boolean>;deleteDictionary:(id:string)=>Promise<boolean>;personalDictionary:()=>Promise<DictionaryEntry[]>;saveDictionaryWord:(entry:Partial<DictionaryEntry>,oldWord?:string)=>Promise<DictionaryEntry>;deleteDictionaryWord:(word:string)=>Promise<boolean>;
   wordbooks:()=>Promise<WordbookInfo[]>;previewWordbook:(input?:{builtin?:string;path?:string})=>Promise<WordbookPreview|null>;importWordbook:(token:string,input:{name?:string;notebookId?:string})=>Promise<WordbookImport>;
   wordDetails:(input:{text:string;translation:string;definition?:string},generate?:boolean)=>Promise<WordRelations>;
   production:(id:string)=>Promise<{entry:Entry;exercise:ProductionExercise}>;productionDraft:(id:string,exerciseId:string,text:string)=>Promise<Entry>;answerProduction:(id:string,exerciseId:string,text:string)=>Promise<{entry:Entry;result:ProductionResult}>;onEntriesChanged:(fn:()=>void)=>()=>void;
-  createNotebook:(input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;updateNotebook:(id:string,input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;deleteNotebook:(id:string)=>Promise<boolean>;assignNotebook:(id:string,ids:string[],remove?:boolean)=>Promise<boolean>;
+  createNotebook:(input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;updateNotebook:(id:string,input:{name:string;bookIds:string[];includeExisting:boolean})=>Promise<Notebook>;deleteNotebook:(id:string)=>Promise<boolean>;assignNotebook:(id:string,ids:string[],remove?:boolean)=>Promise<boolean>;moveNotebook:(fromId:string,toId:string,ids:string[])=>Promise<{moved:number;fromId:string;toId:string}>;
   reportProgress:(id:string,patch:{location:string|number;progress:number})=>void;onStorageError:(fn:(error:string)=>void)=>()=>void;
   boot:()=>Promise<State>; importBooks:(paths?:string[])=>Promise<Book[]>;readBook:(id:string)=>Promise<{html?:string;text?:string;bytes?:Uint8Array;warnings?:string[];resources?:Record<string,string>}>;updateBook:(id:string,patch:Partial<Book>)=>Promise<Book>;deleteBook:(id:string)=>Promise<boolean>;
   lookupAI:(text:string)=>Promise<DictionaryEntry>;dictionaryExample:(input:{text:string;translation:string;definition:string})=>Promise<{sentence:string;translation:string}>;

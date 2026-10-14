@@ -1,7 +1,22 @@
 const {test}=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
 const {Store}=require('../electron/store.cjs'),{makeEntry,reviewEntry}=require('../electron/core.cjs');
 const {notebookIds,saveNotebook,collectMembership,deleteNotebook,assignEntries,mergeBackup}=require('../electron/notebooks.cjs');
+const {moveEntries}=require('../electron/notebooks.cjs');
 function store(){const s=new Store(fs.mkdtempSync(path.join(os.tmpdir(),'memreader-notebooks-')));s.state.books=[{id:'a',title:'A',hash:'aaa'},{id:'b',title:'B',hash:'bbb'}];return s;}
+test('moving entries removes only the source membership even when the destination already contains them',()=>{
+ const s=store(),a=saveNotebook(s,{name:'Math',bookIds:[]}),b=saveNotebook(s,{name:'Extra',bookIds:[]}),c=saveNotebook(s,{name:'Other',bookIds:[]});
+ const entry=reviewEntry(reviewEntry(makeEntry({text:'scalene',translation:'不等边的',context:'A scalene triangle has three different sides.'}),3,new Date(),'meaning'),1,new Date(),'cloze');entry.notebookIds=[a.id,b.id,c.id];entry.note='Keep';s.state.entries=[entry];s.state.stats.reviews=[{entryId:entry.id,rating:3,mode:'meaning'}];s.save();const before=JSON.parse(JSON.stringify(s.state));
+ assert.deepEqual(moveEntries(s,a.id,b.id,[entry.id,entry.id]),{moved:1,fromId:a.id,toId:b.id});assert.deepEqual(s.state.entries[0].notebookIds,[b.id,c.id]);
+ assert.deepEqual(JSON.parse(JSON.stringify({...s.state.entries[0],notebookIds:before.entries[0].notebookIds})),before.entries[0]);assert.deepEqual(s.state.stats,before.stats);assert.deepEqual(new Store(s.dir).state.entries[0].notebookIds,[b.id,c.id]);
+});
+test('moving rejects ambiguous virtual sources, stale selections and same destinations without changing data',()=>{
+ const s=store(),a=saveNotebook(s,{name:'First',bookIds:[]}),b=saveNotebook(s,{name:'Second',bookIds:[]});s.state.entries=[makeEntry({text:'retain',translation:'保留'})];s.save();const before=JSON.stringify(s.state),id=s.state.entries[0].id;
+ for(const input of [['all',b.id,[id]],[a.id,a.id,[id]],[a.id,b.id,[id]],['unfiled','missing',[id]],['unfiled',b.id,['missing']]]){assert.throws(()=>moveEntries(s,...input));assert.equal(JSON.stringify(s.state),before);}
+ moveEntries(s,'unfiled',b.id,[id]);assert.deepEqual(s.state.entries[0].notebookIds,[b.id]);
+});
+test('a failed move leaves memberships and review records intact on disk and in memory',()=>{
+ const s=store(),a=saveNotebook(s,{name:'First',bookIds:[]}),b=saveNotebook(s,{name:'Second',bookIds:[]}),entry=makeEntry({text:'retain',translation:'保留'});entry.notebookIds=[a.id];s.state.entries=[entry];s.save();const before=JSON.stringify(s.state),disk=fs.readFileSync(s.file,'utf8');s.save=()=>{throw Error('disk full');};assert.throws(()=>moveEntries(s,a.id,b.id,[entry.id]),/disk full/);assert.equal(JSON.stringify(s.state),before);assert.equal(fs.readFileSync(s.file,'utf8'),disk);
+});
 test('explicit destination overrides source links; ambiguous sources require a choice',()=>{
   const s=store(),a=saveNotebook(s,{name:'First',bookIds:['a']}),b=saveNotebook(s,{name:'Second',bookIds:['a']});
   assert.throws(()=>notebookIds(s.state,{bookId:'a'}),/选择/);

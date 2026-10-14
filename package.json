@@ -1,6 +1,6 @@
 {
   "name": "vlm-reader",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "VLMReader — 阅读、理解与记忆",
   "author": "VLMReader",
   "private": true,
@@ -70,7 +70,9 @@
       "electron/review-examples.cjs",
       "electron/translation.cjs",
       "electron/document-files.cjs",
-      "**/node_modules/**/*"
+      "**/node_modules/**/*",
+      "electron/custom-dictionary-worker.cjs",
+      "electron/dictionary-files.cjs"
     ],
     "win": {
       "target": "dir",

@@ -13,17 +13,21 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.2-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.3-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.2-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.3-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
 ## 使用
+
+- 在“生词本 → 管理”中勾选条目，选择目标词本，再点击“移动所选”。条目从当前词本移出，保留其他词本归属、原句、笔记与全部复习进度；成功后可直接查看目标词本。“全部词条”等汇总视图需先选择具体来源词本。
+- 内置 ECDICT 完整版约 340 万英汉词条与 176 万短语，CC-CEDICT 约 20 万汉英查询项；Open English WordNet 提供英英释义、同义词和已有例句。词典显示专业领域释义、词形与搭配。AI 用法及专业释义补充按需生成，标注来源并本地缓存。
+- 在“查单词”或设置中点击“管理词典”，可以添加、编辑自己的词条，或导入 CSV、TSV、JSON 和 StarDict（.ifo/.idx/.dict，支持压缩索引与 .dict.dz）。自定义词典优先显示，也保留内置词典结果；可启用、停用或删除，词本与复习记录不受影响。详见 [词典导入格式](docs/dictionaries.md)。
 
 - 导入 PDF、EPUB、DOCX、TXT、Markdown 或 HTML；支持拖入文件、搜索、目录、阅读进度、收藏、书签与打印。PDF 原版和文字模式均连续滚动，各页自然衔接，跨页不会跳到页首；EPUB 支持滚轮翻页。
 - DOCX 保留原有荧光笔颜色、文字颜色、文字底纹、粗体、斜体、下划线、表格和嵌入图片；支持段落 / 字符样式继承及主题色。已经导入的 DOCX 直接打开即可使用，无需重新导入，也不会改动源文件。HTML / Markdown 保留文字颜色、标注及图片，导入时将同目录及子目录内引用的图片一起保存；已有 HTML / Markdown 可重新导入同一文件补全图片，不会重复建书。EPUB 与原版 PDF 保留其原始颜色和图片。PDF 文字模式重排正文，并尽量保留图片、矢量图、文字颜色和荧光笔标注，包括独立 Highlight 批注和已画进页面的色块；改变字体及字号后标注仍跟随对应文字。图片按原页渲染，保留旋转、透明度、遮罩及图内标签，邻近正文保持可选取；只在接近可见区域时提取，同一本书阅读期间切换字体或模式直接复用。已导入的 PDF 直接打开即可，无需重导入，也不会改动源文件。

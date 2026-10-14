@@ -1,1 +1,13 @@
-{"enCount": 770611, "zhCount": 198379, "builtAt": "2026-10-10", "sources": ["ECDICT (MIT)", "CC-CEDICT (CC BY-SA 4.0)"]}
+{
+  "enCount": 3403140,
+  "zhCount": 198379,
+  "builtAt": "2026-10-14",
+  "sources": [
+    "ECDICT full + curated basic (MIT)",
+    "CC-CEDICT (CC BY-SA 4.0)"
+  ],
+  "phrases": 1763701,
+  "source": "https://github.com/skywind3000/ECDICT",
+  "edition": "full",
+  "sourceSHA256": "f370a0ecb58ada758d9dfe739db1667fd4ed87ed3055a4a7cb6c7054ecdf83d6"
+}

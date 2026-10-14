@@ -2,6 +2,9 @@ const test=require('node:test'),assert=require('node:assert/strict'),fs=require(
 const {Dictionary}=require('../electron/dictionary.cjs'),{repairDictionaryEntries}=require('../electron/dictionary-policy.cjs'),{Store}=require('../electron/store.cjs'),{makeEntry,reviewEntry,withReviewSkills}=require('../electron/core.cjs');
 const {createClozeService}=require('../electron/cloze.cjs'),{maskCue,semanticDefinition}=require('../shared/review-cues.mjs');
 const dictionary=new Dictionary(path.resolve(__dirname,'../assets'));
+test('the full dictionary adds specialist phrases, and WordNet examples and synonyms remain available offline',async()=>{
+ const phrase=await dictionary.lookup('root mean square');assert.match(phrase.translation,/均方根/);const word=await dictionary.lookup('competence');assert.ok(word.collocations.some(item=>item.text.includes('competence')));assert.match(word.translation,/\[医\]/);const able=await dictionary.lookup('able');assert.ok(able.examples.some(item=>item.text.includes('able')));assert.ok((await dictionary.synonyms('competence')).some(item=>item.word==='competency'));
+});
 function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-dictionary-'));assert.ok(dir.startsWith(path.join(os.tmpdir(),'vlm-dictionary-')));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return new Store(dir);}
 test('scrambled resolves validated verb senses rather than the incomplete technical noun record',async()=>{
  const original=await dictionary.rawLookup('scrambled'),found=await dictionary.lookup('scrambled');assert.match(original.translation,/密码/);assert.match(found.translation,/匆忙/);assert.doesNotMatch(found.translation,/密码|扰频/);assert.equal(found.word,'scrambled');assert.equal(found.lemma,'scramble');assert.ok(found.cueWords.includes('scramble'));assert.match(found.definition,/move hurriedly/);

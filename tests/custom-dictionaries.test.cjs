@@ -1,0 +1,35 @@
+const test=require('node:test'),assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path'),zlib=require('node:zlib');
+const {CustomDictionaries}=require('../electron/custom-dictionaries.cjs'),{readDictionary}=require('../electron/dictionary-files.cjs'),{createRichDictionary}=require('../electron/dictionary-rich.cjs');
+function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-custom-dictionaries-'));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return dir;}
+test('CSV and JSON imports keep complete multi-line meanings, pronunciation, examples and collocations offline',async t=>{
+ const dir=fixture(t),csv=path.join(dir,'user.csv');fs.writeFileSync(csv,'word,translation,definition,phonetic,example,exampleTranslation,collocation\ncompetence,"能力\n[法] 管辖权",Ability to do a task,kɒmpɪtəns,She showed competence.,她表现出了能力。,professional competence\ncompetence,duplicate,,,,,');const d=new CustomDictionaries(dir),preview=await d.preview(csv);assert.equal(preview.count,1);assert.equal(preview.duplicates,1);assert.deepEqual(await d.lookup('competence'),[]);d.commit(preview.token,'Professional');
+ const row=(await d.lookup('COMPETENCE'))[0];assert.equal(row.translation,'能力\n[法] 管辖权');assert.equal(row.phonetic,'kɒmpɪtəns');assert.equal(row.examples[0].translation,'她表现出了能力。');assert.equal(row.collocations[0].text,'professional competence');assert.equal((await new CustomDictionaries(dir).lookup('competence'))[0].source,'Professional');
+ d.update(preview.token,false);assert.deepEqual(await d.lookup('competence'),[]);d.update(preview.token,true);assert.equal((await d.lookup('competence')).length,1);d.remove(preview.token);assert.deepEqual(await d.lookup('competence'),[]);
+});
+test('manual additions, edits and removal persist; invalid or failed changes preserve existing definitions',async t=>{
+ const dir=fixture(t),d=new CustomDictionaries(dir);d.savePersonal({word:'sample',translation:'样品',examples:['A sample was collected.']});assert.equal((await d.lookup('sample'))[0].source,'我的词典');assert.throws(()=>d.savePersonal({word:'sample',translation:'覆盖'}),/同名/);d.savePersonal({word:'sample',translation:'[化] 样品'},'sample');assert.equal((await new CustomDictionaries(dir).lookup('sample'))[0].translation,'[化] 样品');
+ const disk=fs.readFileSync(d.personalFile,'utf8');t.mock.method(fs,'renameSync',()=>{throw Error('disk full');});assert.throws(()=>d.savePersonal({word:'other',definition:'A different word.'}),/disk full/);assert.equal(d.personalEntries().length,1);assert.equal(fs.readFileSync(d.personalFile,'utf8'),disk);t.mock.restoreAll();d.deletePersonal('sample');assert.deepEqual(d.personalEntries(),[]);
+});
+test('StarDict reads compressed UTF-8 definitions and aliases, and rejects corrupt offsets',()=>{
+ const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-stardict-')),base=path.join(dir,'dictionary');try{
+ const contents=Buffer.from('kɒmpɪtəns\0<div>能力<br/>[法] 管辖权</div><script>bad()</script>'),word=Buffer.from('competence\0'),numbers=Buffer.alloc(8);numbers.writeUInt32BE(contents.length,4);const index=Buffer.concat([word,numbers]),alias=Buffer.concat([Buffer.from('competency\0'),Buffer.alloc(4)]);
+ fs.writeFileSync(base+'.ifo',`StarDict's dict ifo file\nversion=3.0.0\nbookname=Rich\nwordcount=1\nidxfilesize=${index.length}\nsametypesequence=th\nsynwordcount=1\n`);fs.writeFileSync(base+'.idx.gz',zlib.gzipSync(index));fs.writeFileSync(base+'.dict.dz',zlib.gzipSync(contents));fs.writeFileSync(base+'.syn',alias);
+ const rows=readDictionary(base+'.ifo').words;assert.equal(rows.length,2);assert.equal(rows[1].word,'competency');assert.match(rows[0].translation,/管辖权/);assert.doesNotMatch(rows[0].translation,/script|bad\(\)/);assert.equal(rows[0].phonetic,'kɒmpɪtəns');numbers.writeUInt32BE(contents.length+1,0);fs.writeFileSync(base+'.idx.gz',zlib.gzipSync(Buffer.concat([word,numbers])));assert.throws(()=>readDictionary(base+'.ifo'),/越界/);
+ }finally{fs.rmSync(dir,{recursive:true,force:true});}
+});
+test('malformed imports leave the catalog unchanged and an abandoned preview is not installed',async t=>{
+ const dir=fixture(t),d=new CustomDictionaries(dir),file=path.join(dir,'bad.json');fs.writeFileSync(file,'[{"word":"blank"}]');await assert.rejects(d.preview(file),/释义/);assert.equal(d.list().length,1);fs.writeFileSync(file,JSON.stringify([{word:'hello',translation:'你好'}]));const plan=await d.preview(file);d.discard(plan.token);assert.throws(()=>d.commit(plan.token),/过期/);assert.equal(d.list().length,1);
+});
+test('rich AI supplements are explicit, shared between requests and survive restart without a second call',async t=>{
+ const dir=fixture(t),dictionary={lookup:async()=>({translation:'能力',definition:'Ability to do a task.'})},settings={apiBase:'http://localhost',apiModel:'test'},result={overview:'名词，表示完成任务的能力。',professional:[{field:'法学',meaning:'管辖权',usage:'用于法律语境'}],collocations:[{phrase:'professional competence',translation:'专业能力',example:'Her professional competence is clear.'}]};let calls=0;
+ const service=createRichDictionary(dictionary,dir,()=>settings,()=>'',async()=>{calls++;await new Promise(resolve=>setImmediate(resolve));return result;});assert.equal(await service('competence'),null);assert.equal(calls,0);const [a,b]=await Promise.all([service('competence',true),service('competence',true)]);assert.deepEqual(a,b);assert.equal(calls,1);assert.deepEqual(await createRichDictionary(dictionary,dir,()=>settings,()=>'',()=>{throw Error('unexpected API')})('competence'),a);
+});
+test('invalid AI output is not cached and can be retried',async t=>{
+ const dir=fixture(t),service=createRichDictionary({lookup:async()=>null},dir,()=>({}),()=>'',async()=>({overview:'test',professional:'invalid',collocations:[]}));await assert.rejects(service('competence',true),/格式/);assert.equal(fs.existsSync(path.join(dir,'dictionary-rich.json')),false);assert.equal(await service('competence'),null);
+});
+test('a failed dictionary installation keeps the preview retryable and cannot partly change the catalog',async t=>{
+ const dir=fixture(t),file=path.join(dir,'dictionary.json'),d=new CustomDictionaries(dir);fs.writeFileSync(file,JSON.stringify([{word:'sample',translation:'样品'}]));const plan=await d.preview(file);t.mock.method(fs,'renameSync',()=>{throw Error('disk full');});assert.throws(()=>d.commit(plan.token,'Science'),/disk full/);assert.equal(d.list().length,1);assert.deepEqual(await d.lookup('sample'),[]);t.mock.restoreAll();d.commit(plan.token,'Science');assert.equal((await new CustomDictionaries(dir).lookup('sample'))[0].source,'Science');
+});
+test('damaged custom files cannot stop built-in lookup or be overwritten by subsequent edits',async t=>{
+ const dir=fixture(t),folder=path.join(dir,'dictionaries');fs.mkdirSync(folder);const file=path.join(folder,'catalog.json');fs.writeFileSync(file,'damaged');const d=new CustomDictionaries(dir);assert.deepEqual(await d.lookup('sample'),[]);assert.throws(()=>d.list(),/损坏/);assert.throws(()=>d.savePersonal({word:'sample',translation:'样品'}),/损坏/);assert.equal(fs.readFileSync(file,'utf8'),'damaged');
+});

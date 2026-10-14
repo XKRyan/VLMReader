@@ -26,10 +26,10 @@ function createWordDetails(dictionary,dataDir,getSettings,getKey,generate=genera
   return async function details(input,generateAI=false){
     if(!input||typeof input.text!=='string'||!normalize(input.text)||input.text.length>100||typeof input.translation!=='string'||input.translation.length>4000)throw Error('请输入有效的单词和释义');
     const entry={text:normalize(input.text),translation:input.translation,definition:typeof input.definition==='string'?input.definition:''};
-    const local=inflections(await dictionary.lookup(entry.text).catch(()=>null)),settings=getSettings();
+    const local={...inflections(await dictionary.lookup(entry.text).catch(()=>null)),synonyms:dictionary.synonyms?await dictionary.synonyms(entry.text):[],derivations:[]},settings=getSettings();
     const hash=crypto.createHash('sha256').update(JSON.stringify([entry.text.toLowerCase(),entry.translation,entry.definition,settings.apiBase,settings.apiModel])).digest('hex');
     if(cache[hash]){try{return {...local,...validateRelations(cache[hash]),cached:true};}catch{delete cache[hash];}}
-    if(!generateAI)return {...local,synonyms:[],derivations:[],cached:false};
+    if(!generateAI)return {...local,cached:false};
     if(!pending.has(hash)){
       const request=generate(entry,settings,getKey()).then(result=>{
         result=validateRelations(result);const next={...cache,[hash]:result},keys=Object.keys(next);for(const old of keys.slice(0,Math.max(0,keys.length-2000)))delete next[old];

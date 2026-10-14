@@ -32,6 +32,18 @@ function assignEntries(store,id,ids,remove=false){
   const targets=new Set(ids);
   store.replaceState({...state,entries:state.entries.map(entry=>targets.has(entry.id)?{...entry,notebookIds:remove?(entry.notebookIds||[]).filter(value=>value!==id):[...new Set([...(entry.notebookIds||[]),id])]}:entry)});return true;
 }
+function moveEntries(store,fromId,toId,ids){
+  const state=store.state;
+  if(!state.notebooks.some(book=>book.id===toId))throw Error('目标词本不存在');
+  if(fromId!=='unfiled'&&!state.notebooks.some(book=>book.id===fromId))throw Error('请先选择来源词本');
+  if(fromId===toId)throw Error('来源和目标词本不能相同');
+  if(!Array.isArray(ids)||!ids.length||ids.some(id=>typeof id!=='string'))throw Error('请选择要移动的条目');
+  const targets=new Set(ids),selected=state.entries.filter(entry=>targets.has(entry.id));
+  if(selected.length!==targets.size)throw Error('生词条目不存在');
+  if(selected.some(entry=>fromId==='unfiled'?(entry.notebookIds||[]).length:!(entry.notebookIds||[]).includes(fromId)))throw Error('所选条目已不在来源词本，请刷新后重试');
+  store.replaceState({...state,entries:state.entries.map(entry=>targets.has(entry.id)?{...entry,notebookIds:[...new Set([...(entry.notebookIds||[]).filter(id=>id!==fromId),toId])]}:entry)});
+  return {moved:targets.size,fromId,toId};
+}
 function mergeBackup(store,backup){
   if(!Array.isArray(backup?.entries))throw Error('这不是有效的 VLMReader 备份');
   const state=store.state,notebooks=[...state.notebooks],mapping=new Map();
@@ -60,4 +72,4 @@ function mergeBackup(store,backup){
   }
   store.replaceState({...state,notebooks,entries});return count;
 }
-module.exports={notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,mergeBackup};
+module.exports={notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,moveEntries,mergeBackup};
