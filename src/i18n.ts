@@ -70,6 +70,7 @@ Object.assign(english,{
 '尚未安排':'Not scheduled'
 });
 Object.assign(english,{'复习评分':'Review rating','请根据语义回忆完整词形':'Recall the exact word form from its meaning','Enter 提交答案 · F1 / Alt+H 提示':'Enter to submit · F1 / Alt+H for hints','Enter 显示答案／继续 · 方向键选择 · 1–4 评分':'Enter to reveal/continue · Arrow keys to choose · 1–4 to rate'});
+Object.assign(english,{'已选中原文':'Selected text','只高亮':'Highlight only','写批注':'Write a note','Ctrl+Enter 保存':'Ctrl+Enter to save','选中原文，选择高亮或写批注。':'Select text to highlight or annotate.','请先保存或取消当前批注':'Save or cancel the current note first.','放弃未保存的批注？':'Discard unsaved changes?','原有批注会保留，本次修改将不保存。':'The saved note will be kept. Your current changes will be discarded.','放弃修改':'Discard changes','已高亮':'Highlighted','正在处理…':'Processing…','需要翻译时点击 AI 翻译；高亮和批注无需翻译。':'Click AI translation when needed. Highlights and notes work without translation.','高亮和批注可直接使用；AI 翻译需在设置中添加密钥。':'Highlights and notes are available. Add an API key in settings to use AI translation.','AI 翻译':'AI translation','已翻译':'Translated','选中文本操作':'Selected text actions','高亮选中文本':'Highlight selected text','批注选中文本':'Annotate selected text','收起选中操作':'Dismiss selection actions','高亮':'Highlight'});
 export function t(value:string):string{
   if(language==='zh')return value;
   if(english[value]!==undefined)return english[value];

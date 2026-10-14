@@ -67,7 +67,7 @@ const server=http.createServer((request,response)=>{
     await page.keyboard.press('F1');await expect.poll(async()=>(await boot()).entries.find(entry=>entry.id===cloze.id).clozePractice.active.hints).toBe(1);await focused(input);
     const hint=await page.locator('.cloze-hint').innerText();assert.match(hint,/walk|revolve|wind/);assert.doesNotMatch(hint,/\breel(?:s|ed|ing)?\b|past tense|p\. p\./i);
     await page.evaluate(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'F1',repeat:true,bubbles:true,cancelable:true})));assert.equal((await boot()).entries.find(entry=>entry.id===cloze.id).clozePractice.active.hints,1);
-    await page.keyboard.press('Alt+h');await expect(page.locator('.cloze-hint')).toHaveCount(2);await page.keyboard.press('F1');await expect(input).toHaveValue('r');await focused(input);await page.keyboard.press('F1');await page.locator('.cloze-due').waitFor();
+    await page.keyboard.press('Alt+h');await expect(page.locator('.cloze-hint')).toHaveCount(2);await expect(input).toBeEnabled();await focused(input);await page.keyboard.press('F1');await expect(input).toHaveValue('r');await focused(input);await page.keyboard.press('F1');await page.locator('.cloze-due').waitFor();
     state=await boot();assert.equal(state.stats.reviews.at(-1).rating,1);assert.equal(state.stats.reviews.at(-1).hints,4);await focused(page.getByRole('button',{name:'继续',exact:true}));
     await page.screenshot({path:path.join(shots,'04-safe-english-hint-keyboard.png'),timeout:10000});
     await page.keyboard.press('Enter');await focused(input);await page.keyboard.type('resilient');await page.keyboard.press('Enter');await page.locator('.cloze-due').waitFor();await page.keyboard.press('Enter');assert.equal(requests.length,0);

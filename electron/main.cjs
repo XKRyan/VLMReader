@@ -7,6 +7,7 @@ const {Store,DEFAULTS}=require('./store.cjs');
 const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
 const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
+const {saveAnnotation,updateAnnotation,deleteAnnotation}=require('./annotations.cjs');
 const {createWordbookService}=require('./wordbooks.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
 const {REVIEW_METHODS,isUnreviewed}=require('../shared/review-policy.mjs');
@@ -150,9 +151,9 @@ app.whenReady().then(async()=>{
   handle('entries:intervals',(id,mode='meaning')=>reviewIntervals(entryById(id),new Date(),mode));
   handle('bookmarks:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.bookmarks.unshift(item);store.save();return item;});
   handle('bookmarks:delete',id=>{store.state.bookmarks=store.state.bookmarks.filter(b=>b.id!==id);store.save();});
-  handle('notes:add',input=>{const item={...input,id:crypto.randomUUID(),createdAt:new Date().toISOString()};store.state.notes.unshift(item);store.save();return item;});
-  handle('notes:update',(id,patch)=>{const mark=store.state.notes.find(note=>note.id===id);if(!mark)throw Error('批注不存在');if(typeof patch.note==='string')mark.note=patch.note.slice(0,12000);mark.updatedAt=new Date().toISOString();store.save();return mark;});
-  handle('notes:delete',id=>{store.state.notes=store.state.notes.filter(n=>n.id!==id);store.save();});
+  handle('notes:add',input=>saveAnnotation(store,input));
+  handle('notes:update',(id,patch)=>updateAnnotation(store,id,patch));
+  handle('notes:delete',id=>deleteAnnotation(store,id));
   handle('settings:save',input=>{
     const updates={...input};
     if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
