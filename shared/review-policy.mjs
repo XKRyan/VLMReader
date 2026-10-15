@@ -69,6 +69,20 @@ export function inNotebook(entry, scope = '') {
   if (scope === 'unreviewed') return entry.kind === 'word' && isUnreviewed(entry);
   return entry.notebookIds?.includes(scope) || false;
 }
+function mixDueMethods(tasks) {
+  // A large backlog of one ability must not hide the other enabled abilities.
+  // Keep the urgency order inside each ability; all of these cards are due.
+  const lanes = new Map();
+  for (const task of tasks) {
+    if (!lanes.has(task.mode)) lanes.set(task.mode, {tasks: [], index: 0});
+    lanes.get(task.mode).tasks.push(task);
+  }
+  const mixed = [];
+  while (mixed.length < tasks.length) {
+    for (const lane of lanes.values()) if (lane.index < lane.tasks.length) mixed.push(lane.tasks[lane.index++]);
+  }
+  return mixed;
+}
 export function buildReviewQueue(state, kind = 'all', scope = '', now = Date.now()) {
   const day = new Date(now).toLocaleDateString('en-CA');
   const used = new Set(state.stats.reviews.filter(record => record.isNew && new Date(record.time).toLocaleDateString('en-CA') === day).map(record => record.entryId)).size;
@@ -78,5 +92,17 @@ export function buildReviewQueue(state, kind = 'all', scope = '', now = Date.now
     .sort((a, b) => Number(b.learning) - Number(a.learning) || a.due - b.due);
   const limit=Number.isInteger(state.settings.newPerDay)?state.settings.newPerDay:20;
   const fresh = tasks.filter(task => !task.blocked && task.isNew&&task.due<=now).sort((a, b) => a.due - b.due).slice(0, Math.max(0,limit - used));
-  return [...due, ...fresh];
+  return [...mixDueMethods(due), ...fresh];
+}
+export function reconcileReviewQueue(state, queue, index, kind = 'all', scope = '', now = Date.now(), keepCurrentResult = false) {
+  const current = queue[index], entry = current && state.entries.find(entry => entry.id === current.entryId);
+  const allowed = enabledMethods(state.settings).filter(mode => mode !== 'production' || state.settings.apiKeySet);
+  const keep = entry && !entry.suspended && entry.translation && inNotebook(entry, scope)
+    && (kind === 'all' || entry.kind === kind)
+    && (keepCurrentResult || (entry.kind === 'sentence' ? ['meaning', 'cloze'].includes(current.mode) : allowed.includes(current.mode)));
+  const prefix = queue.slice(0, index), answered = new Set(prefix.map(task => task.entryId));
+  const ready = buildReviewQueue(state, kind, scope, now).filter(task => !answered.has(task.entryId) && (!keep || task.entryId !== current.entryId));
+  // Retained pages must pick up changed settings without discarding a valid
+  // current input, saved draft, or feedback the learner is still reading.
+  return [...prefix, ...(keep ? [current] : []), ...ready];
 }

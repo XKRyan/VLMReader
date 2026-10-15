@@ -10,7 +10,7 @@ import ReviewLookup from './ReviewLookup';
 import {clozeFor} from './review';
 import {useReviewFocus,hintShortcut} from './useReviewFocus';
 import {maskCue} from '../shared/review-cues.mjs';
-import {buildReviewQueue,nextReview,inNotebook,isUnreviewed} from '../shared/review-policy.mjs';
+import {buildReviewQueue,reconcileReviewQueue,nextReview,inNotebook,isUnreviewed} from '../shared/review-policy.mjs';
 import type {ReviewTask} from '../shared/review-policy.mjs';
 const labels={meaning:'回忆词义',cloze:'句子填空',spelling:'拼写回忆',production:'造句练习'};
 const answerKey=(text:string)=>text.normalize('NFKC').trim().replace(/\s+/g,' ').toLocaleLowerCase();
@@ -22,6 +22,9 @@ export default function ReviewView({active=true,initialNotebook='',data,replaceE
   const [queue,setQueue]=useState<ReviewTask[]>(()=>makeQueue()),[index,setIndex]=useState(0),[revealed,setRevealed]=useState(false),[typed,setTyped]=useState(''),[intervals,setIntervals]=useState<{rating:number;due:string}[]>([]),[lastId,setLastId]=useState(''),[busy,setBusy]=useState(false),[autoDone,setAutoDone]=useState(false),[clock,setClock]=useState(Date.now());
   const [lookup,setLookup]=useState<WordSelection|null>(null);
   const mutation=useRef(false),scroll=useRef<HTMLDivElement>(null);
+  const currentData=useRef(data);currentData.current=data;
+  const configuration=JSON.stringify([data.settings.reviewMethods,data.settings.apiKeySet,data.settings.sentenceReviewMode,data.settings.newPerDay]);
+  const appliedConfiguration=useRef(configuration);
   const answerInput=useRef<HTMLInputElement>(null),revealButton=useRef<HTMLButtonElement>(null);
   const task=queue[index],entry=data.entries.find(e=>e.id===task?.entryId),sentence=entry?.kind==='sentence',mode=task?.mode||'meaning',automatic=!!entry&&!sentence&&(mode==='cloze'||mode==='production');
   const cloze=entry?clozeFor(entry,data.entries):{text:'',target:'',available:false},writing=mode==='spelling'||mode==='cloze'&&cloze.available,expected=mode==='cloze'?cloze.target:entry?.text||'';
@@ -30,6 +33,11 @@ export default function ReviewView({active=true,initialNotebook='',data,replaceE
   useReviewFocus(revealButton,focusKey,active&&!!entry&&!automatic&&!writing&&!revealed&&!busy&&!lookup);
   const today=data.stats.reviews.filter(r=>new Date(r.time).toLocaleDateString()===new Date().toLocaleDateString()).length;
   useEffect(()=>{let alive=true;setAutoDone(false);setRevealed(false);setTyped('');setIntervals([]);setLookup(null);scroll.current?.scrollTo(0,0);if(entry&&!automatic)void window.mem.intervals(entry.id,mode).then(result=>{if(alive)setIntervals(result);}).catch(e=>{if(alive)onError(e.message);});return()=>{alive=false;};},[entry?.id,index,mode]);
+  useEffect(()=>{
+    if(busy||appliedConfiguration.current===configuration)return;
+    appliedConfiguration.current=configuration;
+    setQueue(previous=>reconcileReviewQueue(data,previous,index,filter,notebookId,Date.now(),autoDone));
+  },[configuration,busy,index,filter,notebookId]);
   const upcoming=data.entries.filter(e=>!e.suspended&&e.translation&&inNotebook(e,notebookId)&&(filter==='all'||e.kind===filter)).map(e=>nextReview(e,data.settings,clock)).filter(task=>!task.blocked&&Number.isFinite(task.due)&&!task.isNew&&task.due>clock).sort((a,b)=>a.due-b.due)[0];
   useEffect(()=>{
     if(!active||entry||busy)return;
@@ -42,7 +50,12 @@ export default function ReviewView({active=true,initialNotebook='',data,replaceE
     try{const isNew=isUnreviewed(entry),result=await window.mem.review(entry.id,rating,mode);replaceEntry(result);onReviewed({entryId:entry.id,mode,rating,time:result.updatedAt||new Date().toISOString(),isNew});setLastId(entry.id);setIndex(i=>i+1);}
     catch(e){onError((e as Error).message);}finally{mutation.current=false;setBusy(false);}
   }
-  async function undo(){if(!lastId||mutation.current)return;mutation.current=true;setBusy(true);try{replaceEntry(await window.mem.undoReview(lastId));onUndoStat(lastId);setIndex(i=>Math.max(0,i-1));setLastId('');}catch(e){onError((e as Error).message);}finally{mutation.current=false;setBusy(false);}}
+  async function undo(){if(!lastId||mutation.current)return;mutation.current=true;setBusy(true);try{
+    const restored=await window.mem.undoReview(lastId),latest=currentData.current,reviews=[...latest.stats.reviews],record=reviews.findLastIndex(review=>review.entryId===lastId);
+    if(record>=0)reviews.splice(record,1);
+    const next={...latest,entries:latest.entries.map(item=>item.id===restored.id?restored:item),stats:{...latest.stats,reviews}},previous=Math.max(0,index-1);
+    replaceEntry(restored);onUndoStat(lastId);setQueue(tasks=>reconcileReviewQueue(next,tasks,previous,filter,notebookId));setIndex(previous);setLastId('');
+  }catch(e){onError((e as Error).message);}finally{mutation.current=false;setBusy(false);}}
   useEffect(()=>{const handler=(event:KeyboardEvent)=>{
     if(!active||automatic||lookup||busy||event.defaultPrevented||event.isComposing||event.ctrlKey||event.metaKey)return;
     const target=event.target instanceof Element?event.target:document.activeElement||document.body;
@@ -62,6 +75,7 @@ export default function ReviewView({active=true,initialNotebook='',data,replaceE
   useEffect(()=>{if(active&&entry&&!automatic&&revealed)scroll.current?.querySelector<HTMLButtonElement>('.ratings .'+(writing&&answerKey(typed)!==answerKey(expected)?'again':'good'))?.focus({preventScroll:true});},[active,entry?.id,revealed,mode]);
   return <div className="review-page"><div className="page-heading"><h1>{t('复习')}</h1><div className="review-heading-actions"><span>{t('今日练习')} {today}</span><button className="secondary compact" onClick={onSettings}><Settings2 size={15}/>{t('复习设置')}</button><button className="secondary compact" onClick={onVocabulary}><NotebookPen size={15}/>{t('生词本')}</button></div></div>
     <div className="review-kind-filter"><select aria-label={t('选择复习词本')} disabled={busy} value={notebookId} onChange={event=>{setNotebookId(event.target.value);reset(filter,event.target.value);}}><option value="">{t('全部词条')}</option><option value="unreviewed">{t('未复习')}</option><option value="unfiled">{t('未归类')}</option>{data.notebooks.map(item=><option value={item.id} key={item.id}>{item.name}</option>)}</select><select aria-label={t('复习内容')} disabled={busy} value={filter} onChange={event=>{setFilter(event.target.value);reset(event.target.value);}}><option value="all">{t('全部条目')}</option><option value="word">{t('单词')}</option><option value="sentence">{t('句子')}</option></select><span className="review-mixed-label">{t('题型自动安排 · 各自独立复习')}</span></div>
+    {data.settings.reviewMethods.includes('production')&&!data.settings.apiKeySet&&<p className="review-method-notice" role="status">{t('造句练习已开启；配置 AI 密钥后才会安排。')} <button className="text-button" onClick={onSettings}>{t('打开翻译设置')}</button></p>}
     <div className="review-session-top"><div className="session-counter"><Layers3 size={17}/><span>{t('本轮复习')}</span><strong>{Math.min(index,queue.length)} / {queue.length}</strong></div>{entry&&<span className="badge review-current-method">{t(sentence?(mode==='cloze'?'关键词填空':'回忆句意'):labels[mode])}</span>}{sentence&&<div className="segmented">{['meaning','cloze'].map(id=><button key={id} disabled={busy} className={mode===id?'active':''} onClick={()=>{setQueue(tasks=>tasks.map((task,i)=>i===index?{...task,mode:id as 'meaning'|'cloze'}:task));void saveSettings({sentenceReviewMode:id as 'meaning'|'cloze'}).catch(()=>{});}}>{t(id==='meaning'?'回忆句意':'关键词填空')}</button>)}</div>}</div><div className="session-progress"><span style={{width:(queue.length?index/queue.length:0)*100+'%'}}/></div>
     <div className="review-card-scroll" ref={scroll}>
       {entry?automatic?mode==='production'?<WordProduction key={entry.id+':'+index} entry={entry} enabled={active&&!lookup} replaceEntry={replaceEntry} onReviewed={onReviewed} onContinue={()=>setIndex(i=>i+1)} onAnswered={()=>{setAutoDone(true);setLastId('');}} onSubmitting={setBusy} onWord={setLookup}/>:<WordCloze key={entry.id+':'+index} entry={entry} keyboardEnabled={active&&!lookup} replaceEntry={replaceEntry} onReviewed={onReviewed} onSpeak={onSpeak} onContinue={()=>setIndex(i=>i+1)} onAnswered={()=>{setAutoDone(true);setLastId('');}} onSubmitting={setBusy} onWord={setLookup}/>:<div className="flashcard"><div className="flashcard-eyebrow">{t(sentence?'句子':labels[mode])}<span>{t(isUnreviewed(entry)?'初次学习':'间隔复习')}</span></div><div className="flashcard-front">

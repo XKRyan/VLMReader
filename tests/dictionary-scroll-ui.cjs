@@ -34,12 +34,15 @@ async function waitForScrollToSettle(region){
   await app.evaluate(({BrowserWindow},size)=>BrowserWindow.getAllWindows()[0].setSize(size.width,size.height),size);
   await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('combobox',{name:'Interface text size',exact:true}).selectOption(String(size.font));await expect.poll(()=>page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-font-size').trim())).toBe(size.font+'px');await page.getByRole('button',{name:'Dictionary',exact:true}).click();await loadWord(page,'clinic');
   console.log('Checking layout '+JSON.stringify(size));
+  await region.evaluate(el=>el.scrollTo(0,0));await waitForScrollToSettle(region);
+  const primaryAction=await page.locator('.dictionary-save').evaluate(el=>{const rect=el.getBoundingClientRect(),region=el.closest('.dictionary-page').getBoundingClientRect(),definition=el.parentElement.querySelector('.definition-block');return {top:rect.top,bottom:rect.bottom,viewportTop:region.top,viewportBottom:region.bottom,beforeDefinition:!!(el.compareDocumentPosition(definition)&Node.DOCUMENT_POSITION_FOLLOWING)};});
+  assert.ok(primaryAction.beforeDefinition,'Destination and save action must precede lengthy definitions');assert.ok(primaryAction.top>=primaryAction.viewportTop&&primaryAction.bottom<=primaryAction.viewportBottom+1,'Save action must be reachable at the top of each dictionary result');
   await region.focus();await page.keyboard.press('PageDown');await expect.poll(()=>region.evaluate(el=>el.scrollTop)).toBeGreaterThan(150);await waitForScrollToSettle(region);
   const currentBounds=await region.boundingBox();await page.mouse.move(currentBounds.x+currentBounds.width*.45,currentBounds.y+currentBounds.height*.5);await page.mouse.wheel(0,10000);
   await expect.poll(()=>region.evaluate(el=>Math.abs(el.scrollHeight-el.clientHeight-el.scrollTop))).toBeLessThan(3);
-  await expect(page.getByRole('button',{name:'Add to notebook',exact:true})).toBeVisible();
-  const layout=await page.evaluate(()=>{const el=document.querySelector('.dictionary-page'),save=document.querySelector('.dictionary-save').getBoundingClientRect();return {outerHeight:document.scrollingElement.scrollHeight,viewport:innerHeight,saveBottom:save.bottom,scrollTop:el.scrollTop,scrollHeight:el.scrollHeight,height:el.clientHeight};});
-  assert.ok(layout.outerHeight<=layout.viewport+1);assert.ok(layout.saveBottom<=layout.viewport+1);assert.ok(layout.scrollTop>0);
+  await expect(page.locator('.dictionary-examples')).toBeVisible();
+  const layout=await page.evaluate(()=>{const el=document.querySelector('.dictionary-page'),content=document.querySelector('.dictionary-examples').getBoundingClientRect();return {outerHeight:document.scrollingElement.scrollHeight,viewport:innerHeight,contentBottom:content.bottom,scrollTop:el.scrollTop,scrollHeight:el.scrollHeight,height:el.clientHeight};});
+  assert.ok(layout.outerHeight<=layout.viewport+1);assert.ok(layout.contentBottom<=layout.viewport+1);assert.ok(layout.scrollTop>0);
   cases.push({...size,...layout});
   if(size.width===1400)await page.screenshot({path:path.join(root,'publication','dictionary-scroll-bottom.png'),timeout:10000});
  }
@@ -47,6 +50,6 @@ async function waitForScrollToSettle(region){
  let state=await page.evaluate(()=>window.mem.boot());assert.ok(state.entries.some(e=>e.text==='clinic'));
  await page.getByRole('button',{name:'Vocabulary',exact:false}).click();assert.equal(await page.evaluate(()=>document.scrollingElement.scrollTop),0);
  assert.deepEqual(errors,[]);
- const report={version:await app.evaluate(({app})=>app.getVersion()),executable,mouseWheel:true,keyboardPageDown:true,bottomSaveReachable:true,saveWorks:true,fixedNavigation:true,rootDoesNotScroll:true,cases,errors};
+ const report={version:await app.evaluate(({app})=>app.getVersion()),executable,mouseWheel:true,keyboardPageDown:true,topSaveReachable:true,bottomContentReachable:true,saveWorks:true,fixedNavigation:true,rootDoesNotScroll:true,cases,errors};
  fs.writeFileSync(path.join(root,'publication','dictionary-scroll-validation.json'),JSON.stringify(report,null,2));console.log('DICTIONARY SCROLL UI PASSED '+JSON.stringify(report));
 })().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(app)await app.close().catch(()=>{});});

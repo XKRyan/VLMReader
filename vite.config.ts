@@ -6,5 +6,6 @@ import path from 'node:path';
 // @ts-ignore Build-time Babel plugin; UI text is localized without touching document content.
 import localization from './scripts/i18n-plugin.mjs';
 const pdfRoot=path.dirname(createRequire(import.meta.url).resolve('pdfjs-dist/package.json'));
+const appVersion=createRequire(import.meta.url)('./package.json').version;
 const pdfAssets={name:'pdf-assets',closeBundle(){for(const folder of ['cmaps','standard_fonts','wasm'])cpSync(path.join(pdfRoot,folder),path.join('dist','pdf-assets',folder),{recursive:true});}};
-export default defineConfig({ plugins: [react({babel:{plugins:[localization]}}),pdfAssets], base: './', build: { chunkSizeWarningLimit: 1500,commonjsOptions:{include:[/node_modules/,/palette\.cjs$/]} } });
+export default defineConfig({ define:{__APP_VERSION__:JSON.stringify(appVersion)},plugins: [react({babel:{plugins:[localization]}}),pdfAssets], base: './', build: { chunkSizeWarningLimit: 1500,commonjsOptions:{include:[/node_modules/,/palette\.cjs$/]} } });

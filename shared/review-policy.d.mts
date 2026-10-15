@@ -8,3 +8,4 @@ export function isUnreviewed(entry:Entry):boolean;
 export function nextReview(entry:Entry,settings?:Partial<Settings>,now?:number):ReviewTask;
 export function inNotebook(entry:Entry,scope?:string):boolean;
 export function buildReviewQueue(state:State,kind?:string,scope?:string,now?:number):ReviewTask[];
+export function reconcileReviewQueue(state:State,queue:ReviewTask[],index:number,kind?:string,scope?:string,now?:number,keepCurrentResult?:boolean):ReviewTask[];

@@ -5,6 +5,7 @@ import '@fontsource/inter/500.css';
 import '@fontsource/inter/600.css';
 import './style.css';
 import './appearance.css';
+import './compact.css';
 import App from './App';
 class ErrorBoundary extends React.Component<{children:React.ReactNode},{error:string}> {
   state={error:''};static getDerivedStateFromError(error:Error){return {error:error.message};}

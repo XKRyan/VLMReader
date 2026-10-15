@@ -32,6 +32,13 @@ function near(value,expected){assert.ok(Math.abs(parseFloat(value)-expected)<0.0
     await page.screenshot({path:path.join(shots,'10-large-interface-settings.png')});
     await size.selectOption('20');await page.waitForFunction(()=>getComputedStyle(document.querySelector('.nav-item')).fontSize==='20px');
     await page.getByRole('button',{name:/^生词本/}).first().click();
+    // Native entry buttons keep opening separate from selection/actions, and work without a mouse.
+    const entryButtons=page.locator('.vocab-entry-button');await entryButtons.first().focus();await page.keyboard.press('ArrowDown');await expect(entryButtons.nth(1)).toBeFocused();
+    await page.keyboard.press('Home');await expect(entryButtons.first()).toBeFocused();await page.keyboard.press('Enter');
+    await expect(entryButtons.first()).toHaveAttribute('aria-expanded','true');assert.equal(await page.locator('.vocab-detail .entry-head h2').innerText(),'resilient');
+    await page.keyboard.press('End');await expect(entryButtons.last()).toBeFocused();await page.keyboard.press('Space');
+    await expect(entryButtons.last()).toHaveAttribute('aria-expanded','true');assert.equal(await page.locator('.vocab-detail .entry-head h2').innerText(),'A resilient learner keeps trying.');
+    await page.getByRole('button',{name:'关闭详情',exact:true}).focus();await page.keyboard.press('Escape');await expect(entryButtons.last()).toBeFocused();assert.equal(await page.locator('.vocab-detail').count(),0);
     assert.equal(await page.getByRole('checkbox',{name:'全选当前列表',exact:true}).count(),0);await page.getByRole('button',{name:'管理',exact:true}).click();
     const all=page.getByRole('checkbox',{name:'全选当前列表',exact:true}),bulk=page.getByRole('button',{name:'删除所选',exact:true});
     assert.ok(await bulk.isDisabled());await page.getByRole('checkbox',{name:'选择 resilient',exact:true}).check();

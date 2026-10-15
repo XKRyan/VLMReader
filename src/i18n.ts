@@ -164,3 +164,5 @@ Object.assign(english,{
 
 Object.assign(english,{'在此处另写批注':'Add another annotation here'});
 Object.assign(english,{'导出':'Export','导出中…':'Exporting…'});
+
+Object.assign(english,{'造句练习已开启；配置 AI 密钥后才会安排。':'Sentence writing is enabled. Add an AI key to schedule it.','初学先练基础，再混合安排填空、拼写与造句。':'Start with the basics, then mix cloze, spelling and sentence writing.'});
