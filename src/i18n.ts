@@ -150,3 +150,5 @@ export function t(value:string):string{
 }
 
 Object.assign(english,{'高亮颜色':'Highlight color','黄色':'Yellow','绿色':'Green','蓝色':'Blue','粉色':'Pink','紫色':'Purple','主题色':'Theme color','选择高亮颜色':'Choose highlight color','高亮颜色无效':'Invalid highlight color'});
+
+Object.assign(english,{'已添加':'Added'});

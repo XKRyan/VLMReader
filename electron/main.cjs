@@ -92,7 +92,13 @@ app.whenReady().then(async()=>{
     if(['txt','md','html','htm'].includes(b.format))return {text:readText(p),resources:imageResources(path.join(dataDir,'books',b.id+'-assets'))};
     return {bytes:new Uint8Array(fs.readFileSync(p))};
   });
-  handle('books:update',(id,patch)=>{const b=bookById(id);for(const key of ['title','location','progress','favorite','cover','pageCount'])if(key in patch)b[key]=patch[key];b.lastRead=new Date().toISOString();store.save();return b;});
+  handle('books:update',(id,patch)=>{
+    const b=bookById(id);
+    if('collectionNotebookId' in patch&&patch.collectionNotebookId!=='unfiled'&&!store.state.notebooks.some(item=>item.id===patch.collectionNotebookId))throw Error('词本不存在');
+    const next={...b};for(const key of ['title','location','progress','favorite','cover','pageCount','collectionNotebookId'])if(key in patch)next[key]=patch[key];
+    if(Object.keys(patch).some(key=>key!=='collectionNotebookId'))next.lastRead=new Date().toISOString();
+    store.replaceState({...store.state,books:store.state.books.map(book=>book.id===id?next:book)});return next;
+  });
   ipcMain.on('books:progress',(_event,id,patch)=>{
     const b=store.state.books.find(book=>book.id===id);
     if(!b||!patch||!Number.isFinite(patch.progress)||!(typeof patch.location==='string'||typeof patch.location==='number'&&Number.isFinite(patch.location)))return;

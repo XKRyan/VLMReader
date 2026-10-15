@@ -147,3 +147,30 @@ html,body,#root{width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
 ::highlight(vlmreader-note-blue){background:#78afec55;color:inherit}
 ::highlight(vlmreader-note-pink){background:#ed97b955;color:inherit}
 ::highlight(vlmreader-note-purple){background:#b399ec55;color:inherit}
+
+/* Preserve each visited workspace, its scroll position and drafts while switching. */
+.page-stack{position:relative;flex:1;min-width:0;min-height:0;overflow:hidden}
+.page-slot{position:absolute;inset:0;display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.page-slot[data-active=false]{visibility:hidden;opacity:0;pointer-events:none;z-index:0}
+.page-slot[data-active=true]{visibility:visible;z-index:1}
+
+/* Transient reading tools open after selection and close without moving the cursor. */
+.translation-panel{--reader-panel-width:303px;width:var(--reader-panel-width);opacity:1;transform:translateX(0);transition:opacity .16s ease,transform .18s ease,width 0s,border-color 0s}
+.translation-panel-inner{display:flex;flex-direction:column;flex:none;width:var(--reader-panel-width);height:100%;min-height:0}
+.translation-panel.is-collapsed{width:0;border-left-width:0;border-left-color:transparent;opacity:0;transform:translateX(14px);pointer-events:none;transition:opacity .16s ease,transform .18s ease,width 0s .18s,border-color 0s .18s}
+.reader-selection-actions{opacity:1;visibility:visible;transform:translate(-50%,0) scale(1);transition:opacity .14s ease,transform .16s ease,visibility 0s}
+.reader-selection-actions[data-open=false]{opacity:0;visibility:hidden;transform:translate(-50%,7px) scale(.98);pointer-events:none;transition:opacity .14s ease,transform .16s ease,visibility 0s .16s}
+.page-slot{transition:opacity .15s ease,visibility 0s}
+.page-slot[data-active=false]{transition:opacity .15s ease,visibility 0s .15s}
+@keyframes reader-surface-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.style-popover,.toc-panel,.modal,.dictionary-result{animation:reader-surface-in .16s ease-out}
+@media(max-width:1250px){.translation-panel{--reader-panel-width:270px}}
+@media(prefers-reduced-motion:reduce){.page-slot,.translation-panel,.reader-selection-actions,.style-popover,.toc-panel,.modal,.dictionary-result{animation:none!important;transition:none!important}}
+
+/* Floating drawers keep PDF text geometry stable during selection. */
+.reader-columns{position:relative;--reader-panel-width:303px}
+.translation-panel{position:absolute;right:0;top:0;bottom:0;z-index:35;box-shadow:-8px 0 28px #0000000b}
+.reader-columns[data-panel-open=true] .reader-selection-actions{left:calc((100% - var(--reader-panel-width))/2);max-width:calc(100% - var(--reader-panel-width) - 20px)}
+@media(max-width:1250px){.reader-columns{--reader-panel-width:270px}}
+
+@media print{.page-stack,.page-slot[data-active=true]{position:static;display:block;height:auto;overflow:visible}.page-slot[data-active=false]{display:none!important}}

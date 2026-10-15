@@ -9,7 +9,7 @@ import {fontStack} from './fonts';
 import {t} from './i18n';
 import {buildPdfReflow,renderPdfFigures,type PdfReflow} from './pdfReflow';
 type Content=Awaited<ReturnType<pdfjs.PDFPageProxy['getTextContent']>>;
-interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onError:(message:string)=>void}
+interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
 export default function PdfDocument(props:Props){
   const root=useRef<HTMLDivElement>(null),current=useRef(props);current.current=props;
   const [pages,setPages]=useState<pdfjs.PDFPageProxy[]>([]),[texts,setTexts]=useState<Content[]|null>(null),[width,setWidth]=useState(800),[loading,setLoading]=useState(true);
@@ -42,11 +42,11 @@ export default function PdfDocument(props:Props){
   useEffect(()=>{paintNotes();},[props.notes]);
   useEffect(()=>{const surface=props.surface.current;if(!surface)return;let frame=0,timer:ReturnType<typeof setTimeout>|undefined;const scroll=()=>{cancelAnimationFrame(frame);clearTimeout(timer);timer=setTimeout(()=>{frame=requestAnimationFrame(report);},100);};surface.addEventListener('scroll',scroll);return()=>{surface.removeEventListener('scroll',scroll);cancelAnimationFrame(frame);clearTimeout(timer);};},[pages.length,props.doc]);
   useEffect(()=>{props.control.current={prev:()=>go(Math.max(1,active.current-1)),next:()=>go(Math.min(props.doc.numPages,active.current+1)),go,getText:()=>plainTexts.current.get(active.current)||'',
-    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,locate,
+    nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,clearSelection:()=>document.getSelection()?.removeAllRanges(),locate,
     search:async query=>{const result=[];for(let index=1;index<=props.doc.numPages;index++){const text=await pageText(index),at=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());if(at>=0)result.push({label:t('第')+' '+index+' '+t('页'),location:index,excerpt:text.slice(Math.max(0,at-65),at+150)});if(result.length>=80)break;}return result;}};return()=>{props.control.current=null;};},[pages.length,props.doc]);
   useEffect(()=>root.current?installPdfDragSelection(root.current):undefined,[props.doc,props.settings.pdfTextMode]);
   function select(){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
-    if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);return;}
+    if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);else current.current.onDismissSelection();return;}
     const info=selectionFromDoc(document,element.textContent||'',Number(element.dataset.pdfPage));if(info)current.current.onSelection(info);
   }
   const lastClicked=useRef<string|null>(null);
