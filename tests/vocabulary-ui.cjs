@@ -1,5 +1,5 @@
 process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
-const {_electron:electron}=require('@playwright/test');
+const {_electron:electron,expect}=require('@playwright/test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {Store}=require('../electron/store.cjs'),{makeEntry,reviewEntry}=require('../electron/core.cjs');
 const root=path.resolve(__dirname,'..'),profile=path.join(__dirname,'vocabulary-data-'+Date.now()),shots=path.join(__dirname,'screenshots');
@@ -60,7 +60,7 @@ function near(value,expected){assert.ok(Math.abs(parseFloat(value)-expected)<0.0
     await page.locator('.sticky-detail-heading').getByRole('button',{name:'删除条目',exact:true}).click();await page.getByRole('button',{name:'确认删除',exact:true}).click();await page.getByRole('dialog').waitFor({state:'hidden'});
     assert.equal(await page.locator('.vocab-detail').count(),0);assert.equal((await page.evaluate(()=>window.mem.boot())).entries[0].id,items[2].id);
     await page.getByRole('button',{name:'偏好设置',exact:true}).click();await page.getByRole('combobox',{name:'界面语言',exact:true}).selectOption('en');
-    assert.ok(await page.getByRole('combobox',{name:'Interface text size',exact:true}).isVisible());await page.getByRole('button',{name:/^Vocabulary/}).first().click();await page.getByRole('button',{name:'Manage',exact:true}).click();
+    assert.ok(await page.getByRole('combobox',{name:'Interface text size',exact:true}).isVisible());await page.getByRole('button',{name:/^Vocabulary/}).first().click();await expect(page.getByRole('button',{name:'Done',exact:true})).toHaveAttribute('aria-pressed','true');
     await page.getByRole('checkbox',{name:'Select all in this list',exact:true}).check();await page.getByRole('button',{name:'Delete selected',exact:true}).click();
     assert.ok(await page.getByRole('dialog',{name:'Delete this entry?',exact:true}).isVisible());await page.getByRole('button',{name:'Cancel',exact:true}).click();
     await app.close();app=await launch();page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
