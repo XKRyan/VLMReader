@@ -32,7 +32,7 @@ async function waitForScrollToSettle(region){
  const cases=[];
  for(const size of [{width:1400,height:900,font:16},{width:1000,height:720,font:16},{width:1000,height:720,font:22}]){
   await app.evaluate(({BrowserWindow},size)=>BrowserWindow.getAllWindows()[0].setSize(size.width,size.height),size);
-  await page.evaluate(font=>window.mem.saveSettings({uiFontSize:font}),size.font);await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('button',{name:'Dictionary',exact:true}).click();await loadWord(page,'clinic');
+  await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('combobox',{name:'Interface text size',exact:true}).selectOption(String(size.font));await expect.poll(()=>page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-font-size').trim())).toBe(size.font+'px');await page.getByRole('button',{name:'Dictionary',exact:true}).click();await loadWord(page,'clinic');
   console.log('Checking layout '+JSON.stringify(size));
   await region.focus();await page.keyboard.press('PageDown');await expect.poll(()=>region.evaluate(el=>el.scrollTop)).toBeGreaterThan(150);await waitForScrollToSettle(region);
   const currentBounds=await region.boundingBox();await page.mouse.move(currentBounds.x+currentBounds.width*.45,currentBounds.y+currentBounds.height*.5);await page.mouse.wheel(0,10000);
