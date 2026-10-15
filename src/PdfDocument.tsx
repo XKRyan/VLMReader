@@ -9,7 +9,7 @@ import {fontStack} from './fonts';
 import {t} from './i18n';
 import {buildPdfReflow,renderPdfFigures,type PdfReflow} from './pdfReflow';
 type Content=Awaited<ReturnType<pdfjs.PDFPageProxy['getTextContent']>>;
-interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];preview:AnnotationPreview|null;speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
+interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];preview:AnnotationPreview|null;onRanges:(ranges:Map<string,Range>,preview:Range|null)=>void;speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
 export default function PdfDocument(props:Props){
   const root=useRef<HTMLDivElement>(null),current=useRef(props);current.current=props;
   const [pages,setPages]=useState<pdfjs.PDFPageProxy[]>([]),[texts,setTexts]=useState<Content[]|null>(null),[width,setWidth]=useState(800),[loading,setLoading]=useState(true);
@@ -28,7 +28,7 @@ export default function PdfDocument(props:Props){
   }
   function paintNotes(){
     const next=new Map<string,Range>();for(const note of current.current.notes){const page=pageElement(Math.floor(Number(note.location))),body=page?.querySelector('[data-annotation-root]');if(body){const range=annotationRange(body,note);if(range)next.set(note.id,range);}}
-    ranges.current=next;const preview=current.current.preview,body=preview?pageElement(Math.floor(Number(preview.location)))?.querySelector('[data-annotation-root]'):null,previewRange=preview&&body?annotationRange(body,preview):null;paintHighlights(next,current.current.notes,document,preview&&previewRange?{...preview,range:previewRange}:null);paintSpeech();
+    ranges.current=next;const preview=current.current.preview,body=preview?pageElement(Math.floor(Number(preview.location)))?.querySelector('[data-annotation-root]'):null,previewRange=preview&&body?annotationRange(body,preview):null;paintHighlights(next,current.current.notes,document,preview&&previewRange?{...preview,range:previewRange}:null);current.current.onRanges(next,previewRange);paintSpeech();
     if(pendingNote.current&&next.has(pendingNote.current.id)){const note=pendingNote.current;pendingNote.current=null;locate(note);}
   }
   function paintSpeech(){const body=pageElement(active.current)?.querySelector('[data-annotation-root]'),text=current.current.speechText.trim(),range=body&&text?annotationRange(body,{text}):null;if(range)CSS.highlights.set('memreader-speech',new Highlight(range));else CSS.highlights.delete('memreader-speech');}

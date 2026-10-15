@@ -29,7 +29,7 @@ export function paintHighlights(ranges:Map<string,Range>,notes:Mark[],doc:Docume
   const mask=[...visibleRanges.values(),...(preview?[preview.range]:[])].filter(range=>!range.startContainer.parentElement?.closest('.textLayer'));
   const base=new Highlight(...mask);base.priority=2;registry.set('vlmreader-note-base',base);names.add('vlmreader-note-base');
   const rules:string[]=['::highlight(vlmreader-note-base){background:var(--paper,#fff);color:inherit}'];
-  for(const note of [...visibleNotes].reverse()){
+  for(const note of [...visibleNotes].sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||a.id.localeCompare(b.id))){
     const range=ranges.get(note.id);if(!range)continue;const name='vlmreader-layer-'+names.size,highlight=new Highlight(range);
     highlight.priority=3+Math.max(0,100000-range.toString().length);registry.set(name,highlight);names.add(name);
     const fill=highlightFill(note.color)||'var(--accent)';rules.push('::highlight('+name+'){background:color-mix(in srgb,'+fill+' 34%,transparent);color:inherit}');

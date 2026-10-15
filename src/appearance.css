@@ -188,3 +188,34 @@ html.reader-panel-resizing,html.reader-panel-resizing *{cursor:col-resize!import
 .translation-panel{position:relative;right:auto;top:auto;bottom:auto;flex:0 0 auto;min-width:0;box-shadow:none}
 .reader-columns[data-panel-open=true] .reader-selection-actions{left:50%;max-width:calc(100% - 20px)}
 .reader-panel-resize{left:0}
+
+/* Paragraph notes occupy their own margin and share one badge per anchor. */
+.reader-document-area{display:flex;flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--paper)}
+.reader-document-area>.reader-surface{min-width:0}
+.annotation-gutter{position:relative;flex:0 0 36px;width:36px;overflow:hidden;user-select:none}
+.annotation-gutter.is-empty{flex-basis:0;width:0}
+.annotation-marker{position:absolute;left:0;width:30px;min-height:26px;display:flex;align-items:center;justify-content:center;gap:3px;border-radius:8px;border:1px solid transparent;background:var(--paper);font-size:11px;transition:background .14s,transform .14s,border-color .14s}
+.annotation-marker:hover,.annotation-marker:focus-visible,.annotation-marker.is-active{background:var(--surface);border-color:currentColor;transform:translateX(-2px)}
+.annotation-marker.is-draft{border-style:dashed;border-color:currentColor}
+.annotation-marker span:empty{display:none}
+.annotation-margin-column{position:relative;flex:none;width:clamp(260px,32%,340px);max-width:calc(100% - 320px);min-width:0;overflow:hidden}
+.annotation-margin-card{position:absolute;left:0;right:8px;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--surface);box-shadow:0 4px 16px #00000008;animation:reader-surface-in .16s ease-out;overflow:hidden}
+.annotation-margin-card>header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);flex:none}
+.annotation-margin-card>header strong{font-size:calc(11px * var(--ui-scale));font-weight:600}
+.annotation-margin-card>header small{margin-left:8px;color:var(--muted)}
+.annotation-margin-card>.marks-list{padding:12px;min-height:0;flex:1;overscroll-behavior:contain}
+.annotation-margin-card .annotation-heading{display:none}
+.annotation-margin-card .annotation-editor{border:0;padding:0;margin-bottom:12px}
+.annotation-margin-card .annotation-editor-heading>strong{display:none}
+.annotation-margin-card .annotation-editor-heading{justify-content:flex-end;height:0;visibility:hidden}
+.annotation-margin-card .annotation-editor blockquote{max-height:105px;margin-top:0}
+.annotation-margin-card .annotation-editor textarea{min-height:140px}
+.annotation-margin-card .annotation-editor-actions{flex-wrap:wrap}
+.annotation-margin-card .annotation-editor-actions>small{width:100%;margin-bottom:4px}
+.annotation-margin-card .note-card{padding:12px;margin-bottom:12px}
+.annotation-margin-card .note-card:last-child{margin-bottom:0}
+.annotation-margin-card .note-quote{max-height:110px;overflow:auto;font-size:calc(10px * var(--ui-scale))}
+.annotation-margin-card .note-card p{font-size:calc(11px * var(--ui-scale));line-height:1.7}
+.reader-columns:has(.annotation-margin-column)>.translation-panel.is-collapsed{width:0;transition:none}
+@media(prefers-reduced-motion:reduce){.annotation-marker,.annotation-margin-card{animation:none!important;transition:none!important}}
+@media print{.annotation-gutter,.annotation-margin-column{display:none!important}.reader-document-area{display:block;overflow:visible}}

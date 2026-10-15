@@ -152,6 +152,7 @@ export function t(value:string):string{
 Object.assign(english,{'高亮颜色':'Highlight color','黄色':'Yellow','绿色':'Green','蓝色':'Blue','粉色':'Pink','紫色':'Purple','主题色':'Theme color','选择高亮颜色':'Choose highlight color','高亮颜色无效':'Invalid highlight color'});
 
 Object.assign(english,{'已添加':'Added'});
+Object.assign(english,{'段落批注':'Paragraph annotations','段落批注详情':'Paragraph annotation details','查看此处批注':'View annotations here','未保存批注':'Unsaved annotation','此处批注':'Annotations here','关闭段落批注':'Close paragraph annotations'});
 Object.assign(english,{'英文表达':'English expressions'});
 Object.assign(english,{'调整侧栏宽度':'Resize reading sidebar','拖动调整侧栏宽度；双击恢复默认':'Drag to resize the sidebar; double-click to reset','英文表达与用法补充':'English expressions and usage','侧栏宽度需为 280–760px':'Sidebar width must be 280–760px'});
 Object.assign(english,{'导出带批注文档':'Export annotated document','正在导出…':'Exporting…','已导出带批注文档':'Annotated document exported','将原文、图片、高亮和批注打包，供其他 VLMReader 用户导入。':'Bundle the original document, images, highlights and notes for another VLMReader user to import.'});
@@ -160,3 +161,5 @@ Object.assign(english,{
   '完整词典原文':'Full dictionary article',
   '支持 CSV、TSV、JSON、StarDict 和未加密的 MOBI7 词典（未压缩 / PalmDOC）。MOBI 完整原文单独保留，可展开查看。':'Supports CSV, TSV, JSON, StarDict and unencrypted MOBI7 dictionaries (uncompressed / PalmDOC). Full MOBI articles are preserved separately and can be expanded.'
 });
+
+Object.assign(english,{'在此处另写批注':'Add another annotation here'});

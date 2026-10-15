@@ -8,6 +8,7 @@ import {marked} from 'marked';
 import {fontStack} from './fonts';
 import {getPalette} from '../electron/palette.cjs';
 import PdfDocument from './PdfDocument';
+import ReaderAnnotations from './ReaderAnnotations';
 import {onSelectionClick} from './selectionEvents';
 import {sentenceFor,selectionFromDoc} from './selection';
 import {annotationRange,rangeAtPoint,selectionStart} from './annotations';
@@ -16,7 +17,7 @@ export {sentenceFor} from './selection';
 import type {Book,Settings,Mark,AnnotationPreview,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorker;
 function flattenToc(items:any[],depth=0):ReaderMeta['toc'] {return items.flatMap(item=>[{label:item.label?.trim()||item.title||'章节',href:item.href||'',depth},...flattenToc(item.subitems||[],depth+1)]);}
-interface Props {active:boolean;book:Book;settings:Settings;notes:Mark[];preview:AnnotationPreview|null;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
+interface Props {active:boolean;book:Book;settings:Settings;notes:Mark[];preview:AnnotationPreview|null;annotationId:string|null;onAnnotationOrder:(ids:string[])=>void;renderAnnotations:(ids:string[])=>React.ReactNode;onCloseAnnotations:()=>void;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
 export default function Reader(props:Props) {
   const {book,settings,control,onMeta,onProgress,onSelection,onError,onTitle}=props;
   const mount=useRef<HTMLDivElement>(null), current=useRef(props);current.current=props;
@@ -25,6 +26,7 @@ export default function Reader(props:Props) {
   const container=useRef<HTMLDivElement>(null),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),initialLocation=useRef(book.location);
   const busyRef=useRef(busy);busyRef.current=busy;
   const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubRanges=useRef(new Map<Document,Map<string,Range>>());
+  const previewRange=useRef<Range|null>(null),[annotationRevision,setAnnotationRevision]=useState(0);
   function wheelPage(event:WheelEvent){
     if(!current.current.active||book.format!=='epub'||event.ctrlKey||Math.abs(event.deltaX)>Math.abs(event.deltaY)||!event.deltaY)return;
     event.preventDefault();const now=performance.now(),state=wheelState.current,direction=Math.sign(event.deltaY);if(busyRef.current||now-state.turn<500)return;
@@ -41,13 +43,13 @@ export default function Reader(props:Props) {
       for(const content of contents){const doc=content.document as Document,palette=getPalette(current.current.settings),next=new Map<string,Range>();
         doc.documentElement.style.setProperty('--paper',palette.paper);doc.documentElement.style.setProperty('--accent',palette.accent);
         for(const mark of current.current.notes)if(mark.cfi)try{if(new (ePub as any).CFI(mark.cfi).spinePos!==content.sectionIndex)continue;const range=content.range(mark.cfi);if(range)next.set(mark.id,range);}catch{/* A malformed imported CFI cannot stop reading. */}
-        const preview=current.current.preview;let previewRange:Range|null=null;
-        if(preview?.cfi)try{if(new (ePub as any).CFI(preview.cfi).spinePos===content.sectionIndex)previewRange=content.range(preview.cfi);}catch{/* A draft never prevents rendering the saved notes. */}
-        epubRanges.current.set(doc,next);paintHighlights(next,current.current.notes,doc,preview&&previewRange?{...preview,range:previewRange}:null);
-      }return;
+        const preview=current.current.preview;let draftRange:Range|null=null;
+        if(preview?.cfi)try{if(new (ePub as any).CFI(preview.cfi).spinePos===content.sectionIndex)draftRange=content.range(preview.cfi);}catch{/* A draft never prevents rendering the saved notes. */}
+        if(draftRange)previewRange.current=draftRange;epubRanges.current.set(doc,next);paintHighlights(next,current.current.notes,doc,preview&&draftRange?{...preview,range:draftRange}:null);
+      }if(!current.current.preview)previewRange.current=null;setAnnotationRevision(value=>value+1);return;
     }
-    const next=new Map<string,Range>();if(mount.current)for(const mark of current.current.notes){const range=annotationRange(mount.current,mark);if(range)next.set(mark.id,range);}ranges.current=next;
-    const preview=current.current.preview,previewRange=preview&&mount.current?annotationRange(mount.current,preview):null;paintHighlights(next,current.current.notes,document,preview&&previewRange?{...preview,range:previewRange}:null);
+    const next=new Map<string,Range>();if(mount.current)for(const mark of current.current.notes){const range=annotationRange(mount.current,mark);if(range)next.set(mark.id,range);}ranges.current=next;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));
+    const preview=current.current.preview,draftRange=preview&&mount.current?annotationRange(mount.current,preview):null;previewRange.current=draftRange;paintHighlights(next,current.current.notes,document,preview&&draftRange?{...preview,range:draftRange}:null);setAnnotationRevision(value=>value+1);
   }
   function locate(mark:Mark){textGo(mark.location);const range=ranges.current.get(mark.id),surface=container.current;if(range&&surface)surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}
   function textGo(where:string|number){const el=container.current;if(!el)return;if(typeof where==='number'||/^\d+(\.\d+)?$/.test(where)){el.scrollTop=Number(where);return;}const found=mount.current?.querySelector('#'+CSS.escape(where.replace(/^#/,'')));found?.scrollIntoView({behavior:'smooth',block:'start'});}
@@ -138,8 +140,8 @@ export default function Reader(props:Props) {
   }
   function onMouseMove(e:React.MouseEvent){if(book.format!=='epub'&&container.current)hoverWord(document,e.clientX,e.clientY,container.current);}
   function onScroll(){if(book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
-  return <div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
+  return <div className="reader-document-area"><div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
     {busy&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
-    {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
-  </div>;
+    {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} onRanges={(next,draftRange)=>{ranges.current=next;previewRange.current=draftRange;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));setAnnotationRevision(value=>value+1);}} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
+  </div><ReaderAnnotations surface={container} notes={props.notes} preview={props.preview} activeId={props.annotationId} revision={annotationRevision} getRanges={()=>({ranges:book.format==='epub'?new Map([...epubRanges.current.values()].flatMap(ranges=>[...ranges])):ranges.current,preview:previewRange.current})} onOpen={props.onAnnotation} onClose={props.onCloseAnnotations} render={props.renderAnnotations}/></div>;
 }
