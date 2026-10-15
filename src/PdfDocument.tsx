@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
-import type {Book,Mark,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
+import type {Book,Mark,AnnotationPreview,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
 import {annotationRange,rangeAtPoint} from './annotations';
 import {selectionFromDoc} from './selection';
 import {paintHighlights,clearHighlights} from './highlights';
@@ -9,7 +9,7 @@ import {fontStack} from './fonts';
 import {t} from './i18n';
 import {buildPdfReflow,renderPdfFigures,type PdfReflow} from './pdfReflow';
 type Content=Awaited<ReturnType<pdfjs.PDFPageProxy['getTextContent']>>;
-interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
+interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];preview:AnnotationPreview|null;speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
 export default function PdfDocument(props:Props){
   const root=useRef<HTMLDivElement>(null),current=useRef(props);current.current=props;
   const [pages,setPages]=useState<pdfjs.PDFPageProxy[]>([]),[texts,setTexts]=useState<Content[]|null>(null),[width,setWidth]=useState(800),[loading,setLoading]=useState(true);
@@ -28,7 +28,7 @@ export default function PdfDocument(props:Props){
   }
   function paintNotes(){
     const next=new Map<string,Range>();for(const note of current.current.notes){const page=pageElement(Math.floor(Number(note.location))),body=page?.querySelector('[data-annotation-root]');if(body){const range=annotationRange(body,note);if(range)next.set(note.id,range);}}
-    ranges.current=next;paintHighlights(next,current.current.notes);paintSpeech();
+    ranges.current=next;const preview=current.current.preview,body=preview?pageElement(Math.floor(Number(preview.location)))?.querySelector('[data-annotation-root]'):null,previewRange=preview&&body?annotationRange(body,preview):null;paintHighlights(next,current.current.notes,document,preview&&previewRange?{...preview,range:previewRange}:null);paintSpeech();
     if(pendingNote.current&&next.has(pendingNote.current.id)){const note=pendingNote.current;pendingNote.current=null;locate(note);}
   }
   function paintSpeech(){const body=pageElement(active.current)?.querySelector('[data-annotation-root]'),text=current.current.speechText.trim(),range=body&&text?annotationRange(body,{text}):null;if(range)CSS.highlights.set('memreader-speech',new Highlight(range));else CSS.highlights.delete('memreader-speech');}
@@ -39,7 +39,7 @@ export default function PdfDocument(props:Props){
   useEffect(()=>{const surface=props.surface.current;if(surface)setWidth(Math.min(surface.clientWidth-64,props.settings.contentWidth+180));},[props.settings.contentWidth]);
   useEffect(()=>{let alive=true;if(!props.settings.pdfTextMode){setTexts(null);setLoading(!pages.length);return;}setLoading(true);void (async()=>{const result:Content[]=[];for(let at=1;at<=props.doc.numPages;at+=8){const batch=await Promise.all(Array.from({length:Math.min(8,props.doc.numPages-at+1)},(_,i)=>getContent(at+i)));result.push(...batch);}if(alive){setTexts(result);setLoading(false);}})().catch(error=>{if(alive)props.onError(error.message);});return()=>{alive=false;};},[props.settings.pdfTextMode,props.doc]);
   useEffect(()=>{if(loading||!pages.length||props.settings.pdfTextMode&&!texts)return;const surface=props.surface.current;if(!surface)return;const frame=requestAnimationFrame(()=>{if(!restored.current){restored.current=true;go(initialLocation.current||1);}else go(active.current);paintNotes();report();});return()=>cancelAnimationFrame(frame);},[loading,pages.length,props.settings.pdfTextMode,texts]);
-  useEffect(()=>{paintNotes();},[props.notes]);
+  useEffect(()=>{paintNotes();},[props.notes,props.preview?.text,props.preview?.location,props.preview?.start,props.preview?.cfi,props.preview?.color,props.preview?.id]);
   useEffect(()=>{const surface=props.surface.current;if(!surface)return;let frame=0,timer:ReturnType<typeof setTimeout>|undefined;const scroll=()=>{cancelAnimationFrame(frame);clearTimeout(timer);timer=setTimeout(()=>{frame=requestAnimationFrame(report);},100);};surface.addEventListener('scroll',scroll);return()=>{surface.removeEventListener('scroll',scroll);cancelAnimationFrame(frame);clearTimeout(timer);};},[pages.length,props.doc]);
   useEffect(()=>{props.control.current={prev:()=>go(Math.max(1,active.current-1)),next:()=>go(Math.min(props.doc.numPages,active.current+1)),go,getText:()=>plainTexts.current.get(active.current)||'',
     nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,clearSelection:()=>document.getSelection()?.removeAllRanges(),locate,

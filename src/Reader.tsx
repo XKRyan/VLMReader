@@ -13,10 +13,10 @@ import {sentenceFor,selectionFromDoc} from './selection';
 import {annotationRange,rangeAtPoint,selectionStart} from './annotations';
 import {paintHighlights,clearHighlights} from './highlights';
 export {sentenceFor} from './selection';
-import type {Book,Settings,Mark,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
+import type {Book,Settings,Mark,AnnotationPreview,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorker;
 function flattenToc(items:any[],depth=0):ReaderMeta['toc'] {return items.flatMap(item=>[{label:item.label?.trim()||item.title||'章节',href:item.href||'',depth},...flattenToc(item.subitems||[],depth+1)]);}
-interface Props {active:boolean;book:Book;settings:Settings;notes:Mark[];speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
+interface Props {active:boolean;book:Book;settings:Settings;notes:Mark[];preview:AnnotationPreview|null;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
 export default function Reader(props:Props) {
   const {book,settings,control,onMeta,onProgress,onSelection,onError,onTitle}=props;
   const mount=useRef<HTMLDivElement>(null), current=useRef(props);current.current=props;
@@ -41,10 +41,13 @@ export default function Reader(props:Props) {
       for(const content of contents){const doc=content.document as Document,palette=getPalette(current.current.settings),next=new Map<string,Range>();
         doc.documentElement.style.setProperty('--paper',palette.paper);doc.documentElement.style.setProperty('--accent',palette.accent);
         for(const mark of current.current.notes)if(mark.cfi)try{if(new (ePub as any).CFI(mark.cfi).spinePos!==content.sectionIndex)continue;const range=content.range(mark.cfi);if(range)next.set(mark.id,range);}catch{/* A malformed imported CFI cannot stop reading. */}
-        epubRanges.current.set(doc,next);paintHighlights(next,current.current.notes,doc);
+        const preview=current.current.preview;let previewRange:Range|null=null;
+        if(preview?.cfi)try{if(new (ePub as any).CFI(preview.cfi).spinePos===content.sectionIndex)previewRange=content.range(preview.cfi);}catch{/* A draft never prevents rendering the saved notes. */}
+        epubRanges.current.set(doc,next);paintHighlights(next,current.current.notes,doc,preview&&previewRange?{...preview,range:previewRange}:null);
       }return;
     }
-    const next=new Map<string,Range>();if(mount.current)for(const mark of current.current.notes){const range=annotationRange(mount.current,mark);if(range)next.set(mark.id,range);}ranges.current=next;paintHighlights(next,current.current.notes);
+    const next=new Map<string,Range>();if(mount.current)for(const mark of current.current.notes){const range=annotationRange(mount.current,mark);if(range)next.set(mark.id,range);}ranges.current=next;
+    const preview=current.current.preview,previewRange=preview&&mount.current?annotationRange(mount.current,preview):null;paintHighlights(next,current.current.notes,document,preview&&previewRange?{...preview,range:previewRange}:null);
   }
   function locate(mark:Mark){textGo(mark.location);const range=ranges.current.get(mark.id),surface=container.current;if(range&&surface)surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}
   function textGo(where:string|number){const el=container.current;if(!el)return;if(typeof where==='number'||/^\d+(\.\d+)?$/.test(where)){el.scrollTop=Number(where);return;}const found=mount.current?.querySelector('#'+CSS.escape(where.replace(/^#/,'')));found?.scrollIntoView({behavior:'smooth',block:'start'});}
@@ -98,7 +101,7 @@ export default function Reader(props:Props) {
     if(container.current)container.current.scrollTop=Number(initialLocation.current)||0;
     markText();
   },[html]);
-  useEffect(()=>{markText();},[props.notes]);
+  useEffect(()=>{markText();},[props.notes,props.preview?.text,props.preview?.location,props.preview?.start,props.preview?.cfi,props.preview?.color,props.preview?.id]);
   useEffect(()=>{
     const r=rendition.current;if(!r)return;const colors=getPalette(settings);
     r.themes.default({'body':{color:colors.readingText,background:colors.paper,'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'line-height':String(settings.lineHeight),padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});r.themes.fontSize(settings.fontSize+'px');markText();
@@ -137,6 +140,6 @@ export default function Reader(props:Props) {
   function onScroll(){if(book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
   return <div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
     {busy&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
-    {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
+    {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
   </div>;
 }
