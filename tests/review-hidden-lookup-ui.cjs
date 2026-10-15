@@ -1,0 +1,25 @@
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+const {_electron:electron,expect}=require('@playwright/test');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {Store}=require('../electron/store.cjs'),{makeEntry,withReviewSkills}=require('../electron/core.cjs');
+const root=path.resolve(__dirname,'..'),profile=path.join(root,'publication','review-hidden-lookup-'+Date.now());
+const seed=new Store(profile);seed.state.settings={...seed.state.settings,language:'en',preloadSpeech:false,reviewMethods:['cloze']};
+seed.state.entries=[withReviewSkills(makeEntry({text:'resilient',translation:'有韧性的',definition:'Able to recover quickly after difficulty.',context:'A resilient learner keeps trying.'},new Date(Date.now()-86400000)))];seed.save();
+const env={...process.env,MEMREADER_TEST:'1',MEMREADER_TEST_DATA:profile};delete env.ELECTRON_RUN_AS_NODE;let app;
+const nav=(page,name)=>page.locator('.app-sidebar').getByRole('button',{name:new RegExp('^'+name)});
+(async()=>{
+ app=await electron.launch({executablePath:process.env.MEMREADER_EXE||require('electron'),args:process.env.MEMREADER_EXE?['--disable-gpu']:['--disable-gpu',root],env});
+ const page=await app.firstWindow(),errors=[];page.on('pageerror',error=>errors.push(error.message));await nav(page,'Review').waitFor();
+ await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].showInactive());
+ await nav(page,'Review').click();await page.locator('.cloze-text .sentence-word').filter({hasText:/^learner$/}).click();
+ const lookup=page.getByRole('dialog',{name:'Cloze dictionary',exact:true}),close=page.getByRole('button',{name:'Close lookup',exact:true});
+ await expect(lookup).toBeVisible();await expect(close).toBeFocused();
+ await nav(page,'Vocabulary').click();const search=page.getByRole('textbox',{name:'Search vocabulary',exact:true}),add=page.getByRole('button',{name:'Add word',exact:true});
+ await search.focus();await page.keyboard.press('Tab');await expect(add).toBeFocused();
+ await page.keyboard.press('Shift+Tab');await expect(search).toBeFocused();await page.keyboard.press('Escape');
+ assert.equal((await page.evaluate(()=>window.mem.boot())).stats.reviews.length,0);
+ await nav(page,'Review').click();await expect(lookup).toBeVisible();await expect(close).toBeFocused();
+ await page.keyboard.press('Escape');await expect(lookup).toHaveCount(0);await expect(page.getByRole('textbox',{name:'Cloze answer',exact:true})).toBeFocused();
+ assert.deepEqual(errors,[]);fs.writeFileSync(path.join(root,'publication','review-hidden-lookup-validation.json'),JSON.stringify({version:await app.evaluate(({app})=>app.getVersion()),executable:process.env.MEMREADER_EXE||'source',checks:{hiddenLookupDoesNotTrapTab:true,hiddenLookupIgnoresEscape:true,lookupRestoresOnReturn:true,answerFocusRestoresOnClose:true,noAccidentalGrade:true},errors},null,2));
+ console.log('HIDDEN REVIEW LOOKUP UI PASSED');
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(app)await app.close().catch(()=>{});});
