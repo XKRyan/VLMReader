@@ -51,10 +51,15 @@ class Dictionary {
   }
   async lookup(text){
     const cleaned=this.clean(text);if(!cleaned||cleaned.length>150)return null;
-    const built=await this.builtInLookup(cleaned),custom=this.custom?await this.custom.lookup(cleaned):[];
+    const built=await this.builtInLookup(cleaned);let custom=this.custom?await this.custom.lookup(cleaned):[];
+    // English reference dictionaries often index the lemma rather than every form.
+    const lemma=built?.lemma||built?.word;if(this.custom&&lemma&&lemma.toLowerCase()!==cleaned.toLowerCase()){
+      const inherited=await this.custom.lookup(lemma);for(const row of inherited)if(!custom.some(item=>item.source===row.source))custom.push(row);
+    }
     if(!custom.length)return built;
     const main=custom[0],sections=[...custom,...(built?[built]:[])],unique=values=>[...new Set(values.filter(Boolean))];
-    return {...built,...main,cueWords:unique([cleaned,...(built?.cueWords||[])]),definition:unique(sections.map(row=>row.definition)).join('\n'),translation:main.translation||built?.translation||'',phonetic:main.phonetic||built?.phonetic||'',exchange:main.exchange||built?.exchange||'',examples:sections.flatMap(row=>(row.examples||[]).map(item=>({...item,source:item.source||row.source}))).slice(0,20),collocations:sections.flatMap(row=>(row.collocations||[]).map(item=>({...item,source:item.source||row.source}))).slice(0,20),sections};
+    const reference=!!main.html&&!main.translation;
+    return {...built,...main,word:built?.word||main.word,cueWords:unique([cleaned,...(built?.cueWords||[])]),source:reference&&built?built.source:main.source,definition:reference?built?.definition||main.definition:unique(sections.filter(row=>!row.html).map(row=>row.definition)).join('\n'),translation:main.translation||built?.translation||'',phonetic:(reference?built?.phonetic||main.phonetic:main.phonetic||built?.phonetic)||'',exchange:main.exchange||built?.exchange||'',examples:sections.flatMap(row=>(row.examples||[]).map(item=>({...item,source:item.source||row.source}))).slice(0,20),collocations:sections.flatMap(row=>(row.collocations||[]).map(item=>({...item,source:item.source||row.source}))).slice(0,20),sections};
   }
   async synonyms(word){
     await this.init();if(!this.wordnet)return [];

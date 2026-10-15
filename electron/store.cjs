@@ -3,7 +3,7 @@ const path = require('node:path');
 const {sanitizeColorThemes}=require('./palette.cjs');
 const {withReviewSkills}=require('./core.cjs');
 const {enabledMethods}=require('../shared/review-policy.mjs');
-const DEFAULTS = { theme: 'paper', annotationColor:'yellow', colorThemes:{}, fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
+const DEFAULTS = { theme: 'paper', readerPanelWidth:360, annotationColor:'yellow', colorThemes:{}, fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
   autoSave: true, autoSaveSentences:false, preloadSpeech:true, hoverTranslate: false, rate: 1, enVoice: 0, zhVoice: 3, language:'zh', continuousRead:true,
   newPerDay: 20, vocabPageSize:20,reviewMethods:['meaning','cloze','spelling'],reviewMode: 'meaning', sentenceReviewMode:'meaning', apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false };
 class Store {
@@ -23,6 +23,7 @@ class Store {
     }
     this.state.settings = {...DEFAULTS,...this.state.settings};
     this.state.settings.colorThemes = sanitizeColorThemes(this.state.settings.colorThemes);
+    if(!Number.isInteger(this.state.settings.readerPanelWidth)||this.state.settings.readerPanelWidth<280||this.state.settings.readerPanelWidth>760)this.state.settings.readerPanelWidth=DEFAULTS.readerPanelWidth;
     if(!['yellow','green','blue','pink','purple','theme'].includes(this.state.settings.annotationColor))this.state.settings.annotationColor=DEFAULTS.annotationColor;
     this.state.settings.reviewMethods=enabledMethods(this.state.settings);
     this.state.entries=this.state.entries.map(entry=>{

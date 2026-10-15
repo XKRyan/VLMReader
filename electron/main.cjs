@@ -21,6 +21,7 @@ const {createWordDetails}=require('./word-details.cjs');
 const {createProductionService}=require('./production.cjs');
 const {LibraryExamples}=require('./library-examples.cjs');
 const {readText,copyImages,imageResources}=require('./document-files.cjs');
+const {exportBundle,importBundle}=require('./book-bundle.cjs');
 const isTest=process.env.MEMREADER_TEST==='1';
 if(process.platform==='win32')app.setAppUserModelId('study.memreader.desktop');
 const assets=app.isPackaged?path.join(process.resourcesPath,'assets'):path.join(__dirname,'..','assets');
@@ -46,7 +47,7 @@ function updateMenu(){
   Menu.setApplicationMenu(null);
 }
 function updateChrome(){const p=getPalette(store.state.settings);main?.setTitleBarOverlay({color:p.sidebar,symbolColor:p.text,height:44});}
-const formats=new Set(['pdf','epub','docx','txt','md','html','htm']);
+const formats=new Set(['pdf','epub','docx','txt','md','html','htm','vlmbook']);
 function getKey(){
   const p=path.join(dataDir,'api-key.bin');if(!fs.existsSync(p))return '';
   try{return safeStorage.decryptString(fs.readFileSync(p));}catch{return '';}
@@ -61,6 +62,7 @@ async function importBooks(paths){
   for(const filename of paths){
     if(typeof filename!=='string'||!path.isAbsolute(filename))continue;
     const ext=path.extname(filename).slice(1).toLowerCase();if(!formats.has(ext))continue;
+    if(ext==='vlmbook'){added.push(await importBundle(store,filename));continue;}
     const info=fs.statSync(filename);if(!info.isFile()||info.size>300*1024*1024)throw Error('文档过大（上限 300 MB）：'+path.basename(filename));
     const hash=crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
     const existing=store.state.books.find(b=>b.hash===hash);if(existing){if(['md','html','htm'].includes(ext))copyImages(filename,path.join(dataDir,'books',existing.id+'-assets'));added.push(existing);continue;}
@@ -85,6 +87,11 @@ app.whenReady().then(async()=>{
   const handle=(channel,fn)=>ipcMain.handle(channel,(_event,...args)=>fn(...args));
   handle('boot',async()=>{await ensureDictionaryRepair();return safeState();});
   handle('books:import',importBooks);
+  handle('books:export-annotated',async id=>{
+    const book=bookById(id),name=book.title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,150)||'Document';
+    const result=await dialog.showSaveDialog(main,{title:ui('导出带批注文档','Export annotated document'),defaultPath:name+'.vlmbook',filters:[{name:ui('VLMReader 带批注文档','VLMReader annotated document'),extensions:['vlmbook']}]});
+    if(result.canceled||!result.filePath)return null;const destination=path.extname(result.filePath).toLowerCase()==='.vlmbook'?result.filePath:result.filePath+'.vlmbook';return exportBundle(store,id,destination);
+  });
   handle('books:read',async id=>{
     const b=bookById(id);b.lastRead=new Date().toISOString();store.save();
     const p=path.join(dataDir,'books',b.id+'.'+b.format);
@@ -112,7 +119,7 @@ app.whenReady().then(async()=>{
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
   handle('dictionary:rich',(word,generate)=>richDictionary(word,generate===true));
   handle('dictionaries:list',()=>dictionary.custom.list());
-  handle('dictionaries:preview',async file=>{if(!file){const selected=await dialog.showOpenDialog(main,{title:ui('导入自定义词典','Import dictionary'),properties:['openFile'],filters:[{name:ui('离线词典','Offline dictionaries'),extensions:['csv','tsv','json','ifo']}]});if(selected.canceled)return null;file=selected.filePaths[0];}return dictionary.custom.preview(file);});
+  handle('dictionaries:preview',async file=>{if(!file){const selected=await dialog.showOpenDialog(main,{title:ui('导入自定义词典','Import dictionary'),properties:['openFile'],filters:[{name:ui('离线词典','Offline dictionaries'),extensions:['csv','tsv','json','ifo','mobi']}]});if(selected.canceled)return null;file=selected.filePaths[0];}return dictionary.custom.preview(file);});
   handle('dictionaries:commit',(token,name)=>dictionary.custom.commit(token,name));
   handle('dictionaries:discard',token=>dictionary.custom.discard(token));
   handle('dictionaries:toggle',(id,enabled)=>dictionary.custom.update(id,enabled));
@@ -175,6 +182,7 @@ app.whenReady().then(async()=>{
   handle('notes:delete',id=>deleteAnnotation(store,id));
   handle('settings:save',input=>{
     const updates={...input};
+    if('readerPanelWidth' in updates&&(!Number.isInteger(updates.readerPanelWidth)||updates.readerPanelWidth<280||updates.readerPanelWidth>760))throw Error('侧栏宽度需为 280–760px');
     if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
     if('annotationColor' in updates)validateColor(updates.annotationColor);
     if('colorThemes' in updates)updates.colorThemes=sanitizeColorThemes(updates.colorThemes,true);

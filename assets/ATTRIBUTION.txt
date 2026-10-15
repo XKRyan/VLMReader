@@ -36,3 +36,7 @@ Sentence practice is a product design based on retrieval and spacing; it is not 
 
 Bundled SAT selection: https://github.com/kahngjoonkoh/SAT_word_list (MIT), headwords only. See wordbooks/SAT-LICENSE.txt.
 TOEFL / IELTS headwords are selected by the existing ECDICT exam tags (MIT). These learning lists are not exam-body official word lists.
+
+MOBI7 binary-format reference: Kindling https://github.com/ciscoriordan/kindling (MIT).
+Parser implemented in JavaScript; no external converter is required. Reference license: MOBI-FORMAT-REFERENCE-LICENSE.txt.
+User-imported dictionaries, including American Heritage, are not bundled or redistributed.

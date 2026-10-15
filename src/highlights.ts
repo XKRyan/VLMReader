@@ -10,12 +10,27 @@ export const highlightColors=[
 export function highlightInk(color?:HighlightColor){return highlightColors.find(item=>item.id===color)?.ink||'var(--accent)';}
 export function highlightFill(color?:HighlightColor){return highlightColors.find(item=>item.id===color&&item.id!=='theme')?.fill;}
 const groupName=(color:string)=>'vlmreader-note-'+color;
-export function paintHighlights(ranges:Map<string,Range>,notes:Mark[]){
-  CSS.highlights.set('memreader-notes',new Highlight(...ranges.values()));
+const layers=new WeakMap<Document,Set<string>>();
+function clearLayers(doc:Document){const registry=doc.defaultView?.CSS.highlights;for(const name of layers.get(doc)||[])registry?.delete(name);layers.delete(doc);doc.getElementById('vlmreader-highlight-layers')?.remove();}
+export function paintHighlights(ranges:Map<string,Range>,notes:Mark[],doc:Document=document){
+  const registry=doc.defaultView?.CSS.highlights;if(!registry)return;clearLayers(doc);const names=new Set<string>();layers.set(doc,names);
+  registry.set('memreader-notes',new Highlight(...ranges.values()));
   for(const color of highlightColors.filter(item=>item.id!=='theme')){
     const matching=notes.filter(note=>note.color===color.id).map(note=>ranges.get(note.id)).filter((range):range is Range=>!!range);
-    if(matching.length){const highlight=new Highlight(...matching);highlight.priority=1;CSS.highlights.set(groupName(color.id),highlight);}
-    else CSS.highlights.delete(groupName(color.id));
+    if(matching.length){const highlight=new Highlight(...matching);highlight.priority=1;registry.set(groupName(color.id),highlight);}
+    else registry.delete(groupName(color.id));
   }
+  // An opaque base isolates source HTML/DOCX/EPUB backgrounds. Our own
+  // translucent layers can still blend with one another above that base.
+  // Raster PDF ink must remain visible through its transparent text layer.
+  const mask=[...ranges.values()].filter(range=>!range.startContainer.parentElement?.closest('.textLayer'));
+  const base=new Highlight(...mask);base.priority=2;registry.set('vlmreader-note-base',base);names.add('vlmreader-note-base');
+  const rules:string[]=['::highlight(vlmreader-note-base){background:var(--paper,#fff);color:inherit}'];
+  for(const note of [...notes].reverse()){
+    const range=ranges.get(note.id);if(!range)continue;const name='vlmreader-layer-'+names.size,highlight=new Highlight(range);
+    highlight.priority=3+Math.max(0,100000-range.toString().length);registry.set(name,highlight);names.add(name);
+    const fill=highlightFill(note.color)||'var(--accent)';rules.push('::highlight('+name+'){background:color-mix(in srgb,'+fill+' 34%,transparent);color:inherit}');
+  }
+  if(rules.length){const style=doc.createElement('style');style.id='vlmreader-highlight-layers';style.textContent=rules.join('\n');doc.head.append(style);}
 }
-export function clearHighlights(){CSS.highlights.delete('memreader-notes');for(const color of highlightColors)CSS.highlights.delete(groupName(color.id));}
+export function clearHighlights(doc:Document=document){clearLayers(doc);const registry=doc.defaultView?.CSS.highlights;registry?.delete('memreader-notes');for(const color of highlightColors)registry?.delete(groupName(color.id));}

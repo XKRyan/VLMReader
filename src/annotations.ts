@@ -22,4 +22,4 @@ export function annotationRange(root:Element,mark:Pick<Mark,'text'|'start'|'cont
   if(at<0)at=index.text.indexOf(needle);if(at<0||!index.points[at+needle.length-1])return null;
   const first=index.points[at],last=index.points[at+needle.length-1],range=root.ownerDocument.createRange();range.setStart(first.node,first.start);range.setEnd(last.node,last.end);return range;
 }
-export function rangeAtPoint(ranges:Map<string,Range>,x:number,y:number){for(const [id,range] of ranges)for(const rect of range.getClientRects())if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom)return id;return null;}
+export function rangeAtPoint(ranges:Map<string,Range>,x:number,y:number){let found:string|null=null,length=Infinity;for(const [id,range] of ranges){const size=range.toString().length;if(size>=length)continue;for(const rect of range.getClientRects())if(x>=rect.left&&x<=rect.right&&y>=rect.top&&y<=rect.bottom){found=id;length=size;break;}}return found;}

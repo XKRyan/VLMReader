@@ -11,7 +11,7 @@ import PdfDocument from './PdfDocument';
 import {onSelectionClick} from './selectionEvents';
 import {sentenceFor,selectionFromDoc} from './selection';
 import {annotationRange,rangeAtPoint,selectionStart} from './annotations';
-import {paintHighlights,clearHighlights,highlightFill} from './highlights';
+import {paintHighlights,clearHighlights} from './highlights';
 export {sentenceFor} from './selection';
 import type {Book,Settings,Mark,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorker;
@@ -24,7 +24,7 @@ export default function Reader(props:Props) {
   const pdf=useRef<any>(null),epub=useRef<any>(null),rendition=useRef<any>(null),lastHover=useRef('');
   const container=useRef<HTMLDivElement>(null),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),initialLocation=useRef(book.location);
   const busyRef=useRef(busy);busyRef.current=busy;
-  const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubHighlights=useRef(new Set<string>());
+  const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubRanges=useRef(new Map<Document,Map<string,Range>>());
   function wheelPage(event:WheelEvent){
     if(!current.current.active||book.format!=='epub'||event.ctrlKey||Math.abs(event.deltaX)>Math.abs(event.deltaY)||!event.deltaY)return;
     event.preventDefault();const now=performance.now(),state=wheelState.current,direction=Math.sign(event.deltaY);if(busyRef.current||now-state.turn<500)return;
@@ -35,7 +35,15 @@ export default function Reader(props:Props) {
   function clearSelection(){document.getSelection()?.removeAllRanges();for(const item of rendition.current?.getContents()||[])item.document.getSelection()?.removeAllRanges();}
   function markText(){
     if(book.format==='pdf')return;
-    const r=rendition.current;if(r){for(const cfi of epubHighlights.current)r.annotations.remove(cfi,'highlight');epubHighlights.current.clear();for(const mark of current.current.notes)if(mark.cfi){r.annotations.highlight(mark.cfi,{id:mark.id},()=>{const note=current.current.notes.find(n=>n.id===mark.id);if(note)current.current.onAnnotation(note);},'book-highlight',{fill:highlightFill(mark.color)||getPalette(current.current.settings).accent,'fill-opacity':'0.32','mix-blend-mode':current.current.settings.theme==='night'?'screen':'multiply'});epubHighlights.current.add(mark.cfi);}return;}
+    const r=rendition.current;if(r){
+      const contents=r.getContents(),documents=new Set<Document>(contents.map((content:any)=>content.document));
+      for(const doc of epubRanges.current.keys())if(!documents.has(doc)){clearHighlights(doc);epubRanges.current.delete(doc);}
+      for(const content of contents){const doc=content.document as Document,palette=getPalette(current.current.settings),next=new Map<string,Range>();
+        doc.documentElement.style.setProperty('--paper',palette.paper);doc.documentElement.style.setProperty('--accent',palette.accent);
+        for(const mark of current.current.notes)if(mark.cfi)try{if(new (ePub as any).CFI(mark.cfi).spinePos!==content.sectionIndex)continue;const range=content.range(mark.cfi);if(range)next.set(mark.id,range);}catch{/* A malformed imported CFI cannot stop reading. */}
+        epubRanges.current.set(doc,next);paintHighlights(next,current.current.notes,doc);
+      }return;
+    }
     const next=new Map<string,Range>();if(mount.current)for(const mark of current.current.notes){const range=annotationRange(mount.current,mark);if(range)next.set(mark.id,range);}ranges.current=next;paintHighlights(next,current.current.notes);
   }
   function locate(mark:Mark){textGo(mark.location);const range=ranges.current.get(mark.id),surface=container.current;if(range&&surface)surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}
@@ -56,9 +64,9 @@ export default function Reader(props:Props) {
         if(metadata.title&&book.title!==metadata.title)onTitle(metadata.title);
         const navigation=await b.loaded.navigation;void b.locations.generate(1600).catch(()=>{});
         const r:any=b.renderTo(mount.current!,{width:'100%',height:'100%',flow:'paginated',spread:'none',allowScriptedContent:false});rendition.current=r;
-        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});onSelectionClick(contents.document,(_event,newSelection)=>{if(current.current.active&&!newSelection)current.current.onDismissSelection();});contents.document.addEventListener('mousemove',(event:MouseEvent)=>hoverWord(contents.document,event.clientX,event.clientY,contents.document.body,range=>contents.cfiFromRange(range)));});
+        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});onSelectionClick(contents.document,(event,newSelection)=>{if(!current.current.active||newSelection)return;const id=rangeAtPoint(epubRanges.current.get(contents.document)||new Map(),event.clientX,event.clientY),note=current.current.notes.find(note=>note.id===id);if(note)current.current.onAnnotation(note);else current.current.onDismissSelection();});contents.document.addEventListener('mousemove',(event:MouseEvent)=>hoverWord(contents.document,event.clientX,event.clientY,contents.document.body,range=>contents.cfiFromRange(range)));});
         r.on('selected',(cfi:string,contents:any)=>{if(!current.current.active)return;const selection=selectionFromDoc(contents.document,contents.document.body.innerText,cfi,cfi);if(selection)current.current.onSelection(selection);});
-        r.on('relocated',(loc:any)=>{if(!alive||!current.current.active)return;current.current.onProgress(loc.start.cfi,b.locations.length()?b.locations.percentageFromCfi(loc.start.cfi):((loc.start.index||0)/Math.max(1,(b.spine as any).spineItems.length)));current.current.onMeta({index:loc.start.displayed.page,count:loc.start.displayed.total,toc:flattenToc(navigation.toc)});});
+        r.on('relocated',(loc:any)=>{if(!alive)return;markText();if(!current.current.active)return;current.current.onProgress(loc.start.cfi,b.locations.length()?b.locations.percentageFromCfi(loc.start.cfi):((loc.start.index||0)/Math.max(1,(b.spine as any).spineItems.length)));current.current.onMeta({index:loc.start.displayed.page,count:loc.start.displayed.total,toc:flattenToc(navigation.toc)});});
         const colors=getPalette(current.current.settings);
         r.themes.default({'body':{'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'font-size':settings.fontSize+'px','line-height':String(settings.lineHeight),color:colors.readingText,background:colors.paper,padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});
         r.themes.fontSize(settings.fontSize+'px');await r.display(book.location||undefined);
@@ -80,7 +88,7 @@ export default function Reader(props:Props) {
       }
       if(alive)setBusy(false);
     }).catch(error=>{if(alive){setBusy(false);onError('文档无法打开：'+error.message);}});
-    return()=>{alive=false;clearHighlights();epubHighlights.current.clear();if(hoverTimer.current)clearTimeout(hoverTimer.current);control.current=null;pdf.current?.destroy();pdf.current=null;rendition.current?.destroy();rendition.current=null;epub.current?.destroy();epub.current=null;};
+    return()=>{alive=false;clearHighlights();for(const doc of epubRanges.current.keys())clearHighlights(doc);epubRanges.current.clear();if(hoverTimer.current)clearTimeout(hoverTimer.current);control.current=null;pdf.current?.destroy();pdf.current=null;rendition.current?.destroy();rendition.current=null;epub.current?.destroy();epub.current=null;};
   },[book.id]);
   useEffect(()=>{
     if(!html||!mount.current)return;
@@ -93,7 +101,7 @@ export default function Reader(props:Props) {
   useEffect(()=>{markText();},[props.notes]);
   useEffect(()=>{
     const r=rendition.current;if(!r)return;const colors=getPalette(settings);
-    r.themes.default({'body':{color:colors.readingText,background:colors.paper,'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'line-height':String(settings.lineHeight),padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});r.themes.fontSize(settings.fontSize+'px');
+    r.themes.default({'body':{color:colors.readingText,background:colors.paper,'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'line-height':String(settings.lineHeight),padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});r.themes.fontSize(settings.fontSize+'px');markText();
   },[settings.theme,settings.colorThemes,settings.fontSize,settings.fontFamily,settings.readingFont,settings.lineHeight]);
   useEffect(()=>{
     const mountEl=mount.current;if(!mountEl)return;

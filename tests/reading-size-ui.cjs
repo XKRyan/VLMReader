@@ -1,0 +1,20 @@
+process.env.PW_TEST_SCREENSHOT_NO_FONTS_READY='1';
+const {_electron:electron,expect}=require('@playwright/test'),assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
+const {Store}=require('../electron/store.cjs');
+const root=path.resolve(__dirname,'..'),profile=path.join(root,'publication','reading-size-data-'+Date.now()),store=new Store(profile);store.state.settings={...store.state.settings,language:'en',preloadSpeech:false,fontSize:20,pdfTextMode:false};store.save();
+const errors=[],checks=[];let app;
+(async()=>{
+ const env={...process.env,MEMREADER_TEST:'1',MEMREADER_TEST_DATA:profile};delete env.ELECTRON_RUN_AS_NODE;app=await electron.launch({executablePath:process.env.MEMREADER_EXE||require('electron'),args:process.env.MEMREADER_EXE?['--disable-gpu']:['--disable-gpu',root],env});const page=await app.firstWindow();page.on('pageerror',error=>errors.push(error.message));await page.getByRole('button',{name:'Import documents',exact:true}).waitFor();
+ const text=path.join(profile,'Font size.txt');fs.writeFileSync(text,'This is an original text for reading-size controls.\n\nThe same text can be read at a comfortable size.');const books=await page.evaluate(files=>window.mem.importBooks(files),[text,path.join(root,'tests/fixtures/Formatting.docx'),path.join(root,'tests/fixtures/Formatting.epub'),path.join(root,'tests/fixtures/Courier.pdf')]);await page.reload();
+ for(const format of ['docx','epub','txt','pdf']){
+  const book=books.find(book=>book.format===format);assert.ok(book,'Missing '+format);await page.locator('.book-card').filter({hasText:format.toUpperCase()}).getByRole('button',{name:book.title,exact:true}).click();await page.locator('.reader-loading').waitFor({state:'hidden'});
+  if(format==='pdf'){await expect(page.locator('.pdf-zoom')).toBeVisible();await expect(page.getByRole('group',{name:'Reading text size',exact:true})).toHaveCount(0);await page.getByRole('button',{name:'Switch PDF reading mode',exact:true}).click();}
+  const group=page.getByRole('group',{name:'Reading text size',exact:true}),before=(await page.evaluate(()=>window.mem.boot())).settings.fontSize;await expect(group).toBeVisible();await group.getByRole('button',{name:'Increase text size',exact:true}).click();await expect.poll(async()=>(await page.evaluate(()=>window.mem.boot())).settings.fontSize).toBe(before+1);await expect(group.locator('.reader-font-value')).toHaveText(String(before+1));
+  if(format!=='pdf'&&format!=='epub')await expect.poll(()=>page.locator('.prose').evaluate(el=>getComputedStyle(el).fontSize)).toBe((before+1)+'px');
+  await group.getByRole('button',{name:'Decrease text size',exact:true}).click();await expect.poll(async()=>(await page.evaluate(()=>window.mem.boot())).settings.fontSize).toBe(before);
+  await group.getByRole('button',{name:'Text size and reading style',exact:true}).click();await expect(page.locator('.style-popover')).toBeVisible();await page.getByRole('button',{name:'Close appearance',exact:true}).click();
+  await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].setSize(1000,720));const rect=await group.boundingBox();assert.ok(rect.x>=0&&rect.x+rect.width<=1000&&rect.y+rect.height<=720);assert.equal(await page.evaluate(()=>document.scrollingElement.scrollWidth>innerWidth+1),false);
+  if(format==='docx')fs.writeFileSync(path.join(root,'publication/reading-size-docx.png'),Buffer.from(await app.evaluate(async({BrowserWindow})=>(await BrowserWindow.getAllWindows()[0].webContents.capturePage()).toPNG().toString('base64')),'base64'));checks.push({format,controls:true,saved:true,smallWindow:true});await page.getByRole('button',{name:'Back to library',exact:true}).click();
+ }
+ assert.deepEqual(errors,[]);await app.close();app=null;assert.equal(new Store(profile).state.settings.fontSize,20);fs.writeFileSync(path.join(root,'publication/reading-size-validation.json'),JSON.stringify({executable:process.env.MEMREADER_EXE||'source',checks,errors},null,2));console.log(JSON.stringify(checks));
+})().catch(error=>{console.error(error);process.exitCode=1;}).finally(async()=>{if(app)await app.close().catch(()=>{});});
