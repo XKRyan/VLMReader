@@ -13,7 +13,11 @@ export function compareAnnotations(a,b,format){
 export function layoutAnnotationMarkers(items,height,gap=34){
   const visible=items.filter(item=>item.bottom>0&&item.top<height).sort((a,b)=>a.top-b.top),groups=[];
   for(const item of visible){const previous=groups.at(-1);if(previous&&item.top-previous.top<gap){previous.ids.push(...item.ids);previous.draft||=item.draft;previous.bottom=Math.max(previous.bottom,item.bottom);}else groups.push({...item,ids:[...item.ids]});}
-  const maximum=Math.max(8,height-30);let last=-gap;
+  const maximum=Math.max(8,height-34),capacity=Math.max(1,Math.floor((maximum-8)/gap)+1);
+  // Edge paragraphs may be partly visible; combine the nearest badges if the
+  // viewport cannot hold their complete hit targets and focus rings.
+  while(groups.length>capacity){let at=1;for(let i=2;i<groups.length;i++)if(groups[i].top-groups[i-1].top<groups[at].top-groups[at-1].top)at=i;const previous=groups[at-1],next=groups[at];previous.ids.push(...next.ids);previous.draft||=next.draft;previous.bottom=Math.max(previous.bottom,next.bottom);groups.splice(at,1);}
+  let last=-gap;
   for(const group of groups){group.top=Math.max(8,Math.min(maximum,group.top),last+gap);last=group.top;}
   for(let i=groups.length-1;i>=0;i--)groups[i].top=Math.min(groups[i].top,i===groups.length-1?maximum:groups[i+1].top-gap);
   return groups;

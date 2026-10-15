@@ -1,9 +1,10 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{Worker}=require('node:worker_threads');
 const {validate,key}=require('./dictionary-files.cjs');
+const {openReadOnlyDatabase}=require('./read-only-sqlite.cjs');
 function atomic(file,value){const tmp=file+'.'+crypto.randomUUID()+'.tmp';try{fs.writeFileSync(tmp,JSON.stringify(value));fs.renameSync(tmp,file);}finally{if(fs.existsSync(tmp))fs.unlinkSync(tmp);}}
 class CustomDictionaries{
   constructor(dataDir){
-    this.dir=path.join(dataDir,'dictionaries');fs.mkdirSync(this.dir,{recursive:true});this.file=path.join(this.dir,'catalog.json');this.personalFile=path.join(this.dir,'personal.json');this.catalog=[];this.personal=[];this.cache=new Map();this.plans=new Map();this.revision=0;
+    this.dir=path.join(dataDir,'dictionaries');fs.mkdirSync(this.dir,{recursive:true});this.file=path.join(this.dir,'catalog.json');this.personalFile=path.join(this.dir,'personal.json');this.catalog=[];this.personal=[];this.cache=new Map();this.plans=new Map();this.revision=0;this.reads=Promise.resolve();
     this.problem='';
     try{
       if(fs.existsSync(this.file))this.catalog=JSON.parse(fs.readFileSync(this.file,'utf8'));
@@ -49,14 +50,15 @@ class CustomDictionaries{
     const next=[...this.personal.filter(item=>key(item.word)!==key(oldWord)),row].sort((a,b)=>a.word.localeCompare(b.word));atomic(this.personalFile,next);this.personal=next;this.revision++;return row;
   }
   deletePersonal(word){this.guard();const next=this.personal.filter(item=>key(item.word)!==key(word));atomic(this.personalFile,next);this.personal=next;this.revision++;return true;}
-  async lookup(word){
+  lookup(word){const result=this.reads.then(()=>this.lookupNow(word));this.reads=result.catch(()=>{});return result;}
+  async lookupNow(word){
     if(this.problem)return [];
     const rows=[],mine=this.personal.find(item=>key(item.word)===key(word));if(mine)rows.push({...mine,source:'我的词典'});
-    if(!this.SQL){const init=require('sql.js');this.SQL=await init({locateFile:file=>path.join(path.dirname(require.resolve('sql.js/dist/sql-wasm.js')),file)});}
     for(const item of this.catalog.filter(item=>item.enabled)){
-      let db=this.cache.get(item.id);if(!db){while(this.cache.size>=2){const [id,old]=this.cache.entries().next().value;old.close();this.cache.delete(id);}db=new this.SQL.Database(fs.readFileSync(this.dbFile(item.id)));this.cache.set(item.id,db);}
+      let db=this.cache.get(item.id);if(!db){while(this.cache.size>=2){const [id,old]=this.cache.entries().next().value;old.close();this.cache.delete(id);}db=await openReadOnlyDatabase(this.dbFile(item.id));this.cache.set(item.id,db);}
       const query=db.prepare('SELECT * FROM entries WHERE word=? COLLATE NOCASE');try{query.bind([word]);if(query.step()){const row=query.getAsObject();rows.push({...row,examples:JSON.parse(row.examples),collocations:JSON.parse(row.collocations),source:item.name});}}finally{query.free();}
     }return rows;
   }
+  close(){for(const db of this.cache.values())db.close();this.cache.clear();}
 }
 module.exports={CustomDictionaries};

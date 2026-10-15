@@ -221,4 +221,4 @@ app.whenReady().then(async()=>{
   if(process.env.MEMREADER_DEV)await main.loadURL(process.env.MEMREADER_DEV);else await main.loadFile(path.join(__dirname,'..','dist','index.html'));
 });
 app.on('window-all-closed',()=>app.quit());
-app.on('before-quit',()=>{clearTimeout(progressSaveTimer);libraryExamples.stop();speechService.close();store.save();});
+app.on('before-quit',()=>{clearTimeout(progressSaveTimer);libraryExamples.stop();speechService.close();dictionary.close();store.save();});

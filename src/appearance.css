@@ -192,10 +192,13 @@ html.reader-panel-resizing,html.reader-panel-resizing *{cursor:col-resize!import
 /* Paragraph notes occupy their own margin and share one badge per anchor. */
 .reader-document-area{display:flex;flex:1;position:relative;min-width:0;min-height:0;overflow:hidden;background:var(--paper)}
 .reader-document-area>.reader-surface{min-width:0}
-.annotation-gutter{position:relative;flex:0 0 36px;width:36px;overflow:hidden;user-select:none}
+.annotation-gutter{position:relative;flex:0 0 56px;width:56px;overflow:hidden;user-select:none;isolation:isolate}
 .annotation-gutter.is-empty{flex-basis:0;width:0}
-.annotation-marker{position:absolute;left:0;width:30px;min-height:26px;display:flex;align-items:center;justify-content:center;gap:3px;border-radius:8px;border:1px solid transparent;background:var(--paper);font-size:11px;transition:background .14s,transform .14s,border-color .14s}
-.annotation-marker:hover,.annotation-marker:focus-visible,.annotation-marker.is-active{background:var(--surface);border-color:currentColor;transform:translateX(-2px)}
+.annotation-marker{position:absolute;left:4px;width:48px;height:30px;min-height:30px;padding:4px;display:flex;align-items:center;justify-content:center;gap:3px;border-radius:8px;border:1px solid transparent;background:var(--paper);font-size:11px;line-height:1;white-space:nowrap;transition:background .14s,border-color .14s}
+.annotation-marker>svg{width:14px;height:14px;flex:none}
+.annotation-marker>span{flex:none}
+.annotation-marker:hover,.annotation-marker:focus-visible,.annotation-marker.is-active{background:var(--surface);border-color:currentColor;transform:none}
+.annotation-marker:focus-visible{outline-offset:1px}
 .annotation-marker.is-draft{border-style:dashed;border-color:currentColor}
 .annotation-marker span:empty{display:none}
 .annotation-margin-column{position:relative;flex:none;width:clamp(260px,32%,340px);max-width:calc(100% - 320px);min-width:0;overflow:hidden}
@@ -219,3 +222,11 @@ html.reader-panel-resizing,html.reader-panel-resizing *{cursor:col-resize!import
 .reader-columns:has(.annotation-margin-column)>.translation-panel.is-collapsed{width:0;transition:none}
 @media(prefers-reduced-motion:reduce){.annotation-marker,.annotation-margin-card{animation:none!important;transition:none!important}}
 @media print{.annotation-gutter,.annotation-margin-column{display:none!important}.reader-document-area{display:block;overflow:visible}}
+
+/* Keep sharing discoverable even beside a long document title. */
+.reader-tools{flex:none}
+.reader-title{flex:1}
+.reader-title>div{min-width:0}
+.reader-export-button{flex:none;white-space:nowrap;gap:6px;padding:7px 10px;margin-left:7px}
+.reader-export-button>svg{flex:none}
+@media(max-width:1250px){.reader-title strong{max-width:100%}.reader-tools .toolbar-divider{margin:0 4px}.reader-export-button{padding:7px 8px;margin-left:4px}}

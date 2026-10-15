@@ -163,3 +163,4 @@ Object.assign(english,{
 });
 
 Object.assign(english,{'在此处另写批注':'Add another annotation here'});
+Object.assign(english,{'导出':'Export','导出中…':'Exporting…'});
