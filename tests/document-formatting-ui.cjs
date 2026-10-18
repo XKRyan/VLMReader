@@ -19,8 +19,8 @@ try{
   await expect(page.locator('.prose table')).toBeVisible();
   assert.equal(await page.locator('.prose span').first().evaluate(el=>getComputedStyle(el).fontSize),'23px');assert.match(await page.locator('.prose span').first().evaluate(el=>getComputedStyle(el).fontFamily),/Arial/);
   await page.locator('.prose').evaluate(el=>{const node=[...el.querySelectorAll('span')].find(span=>span.textContent==='yellow highlight').firstChild,range=document.createRange();range.setStart(node,0);range.setEnd(node,6);getSelection().removeAllRanges();getSelection().addRange(range);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));});
-  await expect(page.locator('.entry-head h2')).toHaveText('yellow');await expect.poll(()=>page.evaluate(async()=>(await window.mem.boot()).entries.some(e=>e.text==='yellow'&&e.context.includes('original yellow highlight')))).toBe(true);
-  await page.locator('.translation-content').getByRole('button',{name:'添加批注',exact:true}).click();await page.getByRole('textbox',{name:'批注内容'}).fill('Highlight and annotation coexist.');await page.getByRole('button',{name:'保存批注',exact:true}).click();
+  await expect(page.locator('.entry-head h2')).toHaveText('yellow');await page.locator('.translation-actions').getByRole('button',{name:'加入词本',exact:true}).click();await expect.poll(()=>page.evaluate(async()=>(await window.mem.boot()).entries.some(e=>e.text==='yellow'&&e.context.includes('original yellow highlight')))).toBe(true);
+  await page.getByRole('toolbar',{name:'选中文本操作'}).getByRole('button',{name:'批注选中文本',exact:true}).click();await page.getByRole('textbox',{name:'批注内容'}).fill('Highlight and annotation coexist.');await page.getByRole('button',{name:'保存批注',exact:true}).click();
   await expect.poll(()=>page.evaluate(()=>CSS.highlights.get('memreader-notes')?.size||0)).toBe(1);
   await page.screenshot({path:path.join(shots,'25-docx-formatting.png'),timeout:10000});
   await page.evaluate(()=>window.mem.saveSettings({theme:'night'}));await page.reload();await open(docx);await color(page.locator('.prose span').filter({hasText:/^yellow highlight$/}),'rgb(255, 255, 0)','rgb(0, 0, 0)');

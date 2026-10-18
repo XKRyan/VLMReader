@@ -71,13 +71,14 @@ function readStarDict(file){
 function readDictionary(file){
   const ext=path.extname(file).toLowerCase();if(ext==='.ifo')return readStarDict(file);
   if(ext==='.mobi')return require('./mobi-dictionary.cjs').readMobiDictionary(file,{plain,validate,key});
+  if(ext==='.mdx')return require('./mdx-dictionary.cjs').readMdxDictionary(file,{validate});
   const content=read(file).toString('utf8').replace(/^\uFEFF/,'');let items,name=path.basename(file,ext);
   if(ext==='.json'){const parsed=JSON.parse(content);items=Array.isArray(parsed)?parsed:parsed.entries;name=parsed.name||name;}
   else if(['.csv','.tsv'].includes(ext)){
     const rows=csv(content,ext==='.tsv'?'\t':','),header=rows.shift()?.map(v=>key(v))||[],aliases={word:['word','text','单词','词条'],translation:['translation','meaning','中文','释义'],definition:['definition','english definition','英英释义'],phonetic:['phonetic','音标'],exchange:['exchange','变形'],tags:['tags','tag','标签'],example:['example','sentence','例句'],exampleTranslation:['exampletranslation','例句译文'],collocation:['collocation','搭配']},positions={};for(const [field,keys]of Object.entries(aliases))positions[field]=header.findIndex(value=>keys.includes(value));
     if(positions.word<0)throw Error('词典表格需要 word（词条）列');
     items=rows.map(row=>{const item=Object.fromEntries(Object.entries(positions).map(([field,index])=>[field,index<0?'':row[index]||'']));item.examples=item.example?[{text:item.example,translation:item.exampleTranslation}]:[];item.collocations=item.collocation?[item.collocation]:[];return item;});
-  }else throw Error('支持 CSV、TSV、JSON、StarDict（.ifo）和 MOBI 词典');
+  }else throw Error('支持 CSV、TSV、JSON、StarDict（.ifo）、MOBI 词典和 MDX 词典');
   if(!Array.isArray(items)||!items.length||items.length>1000000)throw Error('词典需包含 1–1000000 个条目');
   return {name:String(name).slice(0,80),words:items.map(validate)};
 }

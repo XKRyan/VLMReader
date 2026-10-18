@@ -2,9 +2,11 @@ const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypt
 const {validate,key}=require('./dictionary-files.cjs');
 const {openReadOnlyDatabase}=require('./read-only-sqlite.cjs');
 function atomic(file,value){const tmp=file+'.'+crypto.randomUUID()+'.tmp';try{fs.writeFileSync(tmp,JSON.stringify(value));fs.renameSync(tmp,file);}finally{if(fs.existsSync(tmp))fs.unlinkSync(tmp);}}
+const short=(value,limit)=>String(value||'').trim().slice(0,limit);
+const aiRow=item=>({...validate(item),lemma:short(item.lemma,150),form:short(item.form,40),createdAt:short(item.createdAt,40)});
 class CustomDictionaries{
   constructor(dataDir){
-    this.dir=path.join(dataDir,'dictionaries');fs.mkdirSync(this.dir,{recursive:true});this.file=path.join(this.dir,'catalog.json');this.personalFile=path.join(this.dir,'personal.json');this.catalog=[];this.personal=[];this.cache=new Map();this.plans=new Map();this.revision=0;this.reads=Promise.resolve();
+    this.dir=path.join(dataDir,'dictionaries');fs.mkdirSync(this.dir,{recursive:true});this.file=path.join(this.dir,'catalog.json');this.personalFile=path.join(this.dir,'personal.json');this.aiFile=path.join(this.dir,'ai-supplement.json');this.ai=[];this.catalog=[];this.personal=[];this.cache=new Map();this.plans=new Map();this.revision=0;this.reads=Promise.resolve();
     this.problem='';
     try{
       if(fs.existsSync(this.file))this.catalog=JSON.parse(fs.readFileSync(this.file,'utf8'));
@@ -12,6 +14,8 @@ class CustomDictionaries{
       if(fs.existsSync(this.personalFile))this.personal=JSON.parse(fs.readFileSync(this.personalFile,'utf8')).map(validate);
       if(this.catalog.some(item=>!fs.existsSync(this.dbFile(item.id))))throw Error('missing file');
     }catch{this.problem='自定义词典文件损坏或缺失，请从备份恢复';this.catalog=[];this.personal=[];}
+    // AI 补充 is a disposable gap filler, so a damaged file never blocks the user's own dictionaries.
+    try{if(fs.existsSync(this.aiFile))this.ai=JSON.parse(fs.readFileSync(this.aiFile,'utf8')).map(aiRow);}catch{this.ai=[];}
 
   }
   dbFile(id){if(!/^[\da-f-]{36}$/.test(id))throw Error('词典不存在');return path.join(this.dir,id+'.sqlite');}
@@ -34,6 +38,19 @@ class CustomDictionaries{
     const next=[...this.catalog,item];atomic(this.file,next);this.catalog=next;this.plans.delete(token);this.revision++;return item;
   }
   discard(token){if(this.plans.has(token)){fs.unlinkSync(this.dbFile(token));this.plans.delete(token);}return true;}
+  // The catalog order is the display priority: the first enabled dictionary
+  // with gloss text becomes the primary source of a lookup.
+  move(id,beforeId){
+    this.guard();
+    const item=this.catalog.find(entry=>entry.id===id);
+    if(!item)throw Error('词典不存在');
+    if(beforeId===id)return this.list();
+    const rest=this.catalog.filter(entry=>entry.id!==id);
+    const at=beforeId?rest.findIndex(entry=>entry.id===beforeId):-1;
+    const next=at>=0?[...rest.slice(0,at),item,...rest.slice(at)]:[...rest,item];
+    atomic(this.file,next);this.catalog=next;this.revision++;
+    return this.list();
+  }
   update(id,enabled){
     this.guard();
     if(typeof enabled!=='boolean'||!this.catalog.some(item=>item.id===id))throw Error('词典不存在');const next=this.catalog.map(item=>item.id===id?{...item,enabled}:item);atomic(this.file,next);this.catalog=next;this.cache.get(id)?.close();this.cache.delete(id);this.revision++;return true;
@@ -43,6 +60,10 @@ class CustomDictionaries{
     if(!this.catalog.some(item=>item.id===id))throw Error('词典不存在');const next=this.catalog.filter(item=>item.id!==id);atomic(this.file,next);this.catalog=next;this.cache.get(id)?.close();this.cache.delete(id);try{fs.unlinkSync(this.dbFile(id));}catch{}this.revision++;return true;
   }
   personalEntries(){return this.personal;}
+  aiEntries(){return this.ai;}
+  aiLookup(word){return this.ai.find(item=>key(item.word)===key(word))||null;}
+  saveAi(input){const row=aiRow({...input,createdAt:new Date().toISOString()}),next=[...this.ai.filter(item=>key(item.word)!==key(row.word)),row].sort((a,b)=>a.word.localeCompare(b.word));atomic(this.aiFile,next);this.ai=next;this.revision++;return row;}
+  deleteAi(word){const next=this.ai.filter(item=>key(item.word)!==key(word));atomic(this.aiFile,next);this.ai=next;this.revision++;return true;}
   savePersonal(input,oldWord){
     this.guard();
     const row=validate({...this.personal.find(item=>key(item.word)===key(oldWord)),...input});if(oldWord&&!this.personal.some(item=>key(item.word)===key(oldWord)))throw Error('自定义词条不存在');

@@ -24,7 +24,12 @@ function wav(samples,sampleRate){
   buffer.writeUInt16LE(1,20);buffer.writeUInt16LE(1,22);buffer.writeUInt32LE(sampleRate,24);buffer.writeUInt32LE(sampleRate*2,28);buffer.writeUInt16LE(2,32);buffer.writeUInt16LE(16,34);
   buffer.write('data',36);buffer.writeUInt32LE(data.length*2,40);for(let i=0;i<data.length;i++)buffer.writeInt16LE(data[i],44+i*2);return buffer;
 }
-function pieces(text){return [...new Intl.Segmenter(languageFor(text),{granularity:'sentence'}).segment(text)].flatMap(s=>s.segment.trim().match(/.{1,500}(?:\s|$)|.{1,500}/gs)||[]);}
+// Intl.Segmenter ends a sentence after titles such as "Mrs."; keep those with the following sentence.
+const ABBREVIATION=/\b(?:Mrs?|Ms|Dr|St|Sr|Jr|Prof|Mt|vs|e\.g|i\.e)\.\s*$/i;
+function pieces(text){
+  const sentences=[];for(const {segment} of new Intl.Segmenter(languageFor(text),{granularity:'sentence'}).segment(text)){if(sentences.length&&ABBREVIATION.test(sentences.at(-1)))sentences[sentences.length-1]+=segment;else sentences.push(segment);}
+  return sentences.flatMap(sentence=>sentence.trim().match(/.{1,500}(?:\s|$)|.{1,500}/gs)||[]);
+}
 function send(message){if(process.connected)process.send(message);}
 async function run(msg){
   if(!msg.stream){
@@ -37,6 +42,9 @@ async function run(msg){
   if(msg.cacheDir)fs.mkdirSync(msg.cacheDir,{recursive:true});
   function encode(samples,rate){if(!encoder)encoder=new Mp3Encoder(1,rate,96);const data=encoder.encodeBuffer(samples);duration+=samples.length/rate;if(data.length)send({id:msg.id,type:'chunk',data:Buffer.from(data).toString('base64'),duration});}
   for(const text of pieces(msg.text)){
+    // Interactive requests (word pronunciation, starting playback) must not
+    // wait for a background page warm-up to finish all of its sentences.
+    if(!msg.priority)await servePriority();
     if(cancelled.has(msg.id))break;
     const language=languageFor(text),sid=language==='zh'?msg.zhVoice:msg.enVoice,key=crypto.createHash('sha256').update(JSON.stringify(['kokoro-v1.1-pcm-v1',text,sid,language])).digest('hex');
     const segmentFile=msg.cacheDir&&path.join(msg.cacheDir,key+'.pcmz');let cached;
@@ -56,8 +64,12 @@ async function run(msg){
   const tail=encoder.flush();if(tail.length)send({id:msg.id,type:'chunk',data:Buffer.from(tail).toString('base64'),duration});
   send({id:msg.id,type:'end',duration,segments});
 }
+async function execute(msg){
+  if(!cancelled.has(msg.id)){try{await run(msg);}catch(err){send({id:msg.id,type:msg.stream?'error':undefined,error:err.message});}}else send({id:msg.id,type:'cancelled'});cancelled.delete(msg.id);
+}
+async function servePriority(){while(queue[0]?.priority)await execute(queue.shift());}
 async function pump(){
   if(running)return;running=true;
-  while(queue.length){const msg=queue.shift();if(!cancelled.has(msg.id)){try{await run(msg);}catch(err){send({id:msg.id,type:msg.stream?'error':undefined,error:err.message});}}else send({id:msg.id,type:'cancelled'});cancelled.delete(msg.id);}running=false;
+  while(queue.length)await execute(queue.shift());running=false;
 }
 process.on('message',msg=>{if(msg.cancel){cancelled.add(msg.id);return;}if(msg.priority)queue.unshift(msg);else queue.push(msg);void pump();});

@@ -63,10 +63,29 @@ export function nextReview(entry, settings = {}, now = Date.now()) {
   return ready.length ? ready.sort((a, b) => Number(b.learning) - Number(a.learning) || b.urgency - a.urgency || a.due - b.due)[0]
     : candidates.sort((a, b) => a.due - b.due)[0];
 }
-export function inNotebook(entry, scope = '') {
+// Notebooks are either the learner's own (words added one by one) or word lists
+// (imported or preset). A word belongs to the word lists only when every notebook
+// holding it is a word list; unfiled words are the learner's own.
+export function wordlistIds(notebooks = []) {
+  return new Set(notebooks.filter(notebook => notebook.kind === 'wordlist').map(notebook => notebook.id));
+}
+export function isListOnly(entry, lists) {
+  const ids = entry.notebookIds || [];
+  return ids.length > 0 && ids.every(id => lists.has(id));
+}
+// Notebooks created before kinds existed: a bulk import (most words added within minutes) is a word list.
+export function inferNotebookKind(notebook, entries) {
+  if (notebook.system) return 'personal';
+  const times = entries.filter(entry => entry.notebookIds?.includes(notebook.id)).map(entry => Date.parse(entry.createdAt)).filter(Number.isFinite).sort((a, b) => a - b);
+  let burst = 0;
+  for (let end = 0, start = 0; end < times.length; end++) { while (times[end] - times[start] > 600000) start++; burst = Math.max(burst, end - start + 1); }
+  return times.length >= 30 && burst >= times.length * 0.8 ? 'wordlist' : 'personal';
+}
+export function inNotebook(entry, scope = '', lists = new Set()) {
   if (!scope || scope === 'all') return true;
   if (scope === 'unfiled') return !entry.notebookIds?.length;
-  if (scope === 'unreviewed') return entry.kind === 'word' && isUnreviewed(entry);
+  if (scope === 'unreviewed') return entry.kind === 'word' && isUnreviewed(entry) && !isListOnly(entry, lists);
+  if (scope === 'unreviewed-lists') return entry.kind === 'word' && isUnreviewed(entry) && isListOnly(entry, lists);
   return entry.notebookIds?.includes(scope) || false;
 }
 function mixDueMethods(tasks) {
@@ -86,7 +105,8 @@ function mixDueMethods(tasks) {
 export function buildReviewQueue(state, kind = 'all', scope = '', now = Date.now()) {
   const day = new Date(now).toLocaleDateString('en-CA');
   const used = new Set(state.stats.reviews.filter(record => record.isNew && new Date(record.time).toLocaleDateString('en-CA') === day).map(record => record.entryId)).size;
-  const tasks = state.entries.filter(entry => !entry.suspended && entry.translation && inNotebook(entry, scope) && (kind === 'all' || kind === entry.kind))
+  const lists = wordlistIds(state.notebooks);
+  const tasks = state.entries.filter(entry => !entry.suspended && entry.translation && inNotebook(entry, scope, lists) && (kind === 'all' || kind === entry.kind))
     .map(entry => nextReview(entry, state.settings, now));
   const due = tasks.filter(task => !task.blocked && !task.isNew && task.due <= now)
     .sort((a, b) => Number(b.learning) - Number(a.learning) || a.due - b.due);
@@ -97,7 +117,7 @@ export function buildReviewQueue(state, kind = 'all', scope = '', now = Date.now
 export function reconcileReviewQueue(state, queue, index, kind = 'all', scope = '', now = Date.now(), keepCurrentResult = false) {
   const current = queue[index], entry = current && state.entries.find(entry => entry.id === current.entryId);
   const allowed = enabledMethods(state.settings).filter(mode => mode !== 'production' || state.settings.apiKeySet);
-  const keep = entry && !entry.suspended && entry.translation && inNotebook(entry, scope)
+  const keep = entry && !entry.suspended && entry.translation && inNotebook(entry, scope, wordlistIds(state.notebooks))
     && (kind === 'all' || entry.kind === kind)
     && (keepCurrentResult || (entry.kind === 'sentence' ? ['meaning', 'cloze'].includes(current.mode) : allowed.includes(current.mode)));
   const prefix = queue.slice(0, index), answered = new Set(prefix.map(task => task.entryId));

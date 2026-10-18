@@ -1,0 +1,6 @@
+English Wiktionary
+Source: https://huggingface.co/datasets/cluesurf/wiktionary-english (parse of the Wikimedia enterprise HTML dump)
+Project: https://en.wiktionary.org
+Creators: Wiktionary contributors.
+License: Creative Commons Attribution-ShareAlike 4.0, https://creativecommons.org/licenses/by-sa/4.0/
+VLMReader keeps definitions, IPA transcriptions and short examples, drops inflection pointers, and stores the result in SQLite.

@@ -10,13 +10,13 @@ const root=path.resolve(__dirname,'..');const profile=path.join(__dirname,'runti
   const page=await app.firstWindow();await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].showInactive());const errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',msg=>{if(msg.type()==='error')console.log('renderer:',msg.text().slice(0,240));});
   await page.getByRole('button',{name:'导入文档',exact:true}).waitFor();await page.screenshot({path:path.join(shots,'01-library.png')});
   console.log('Library rendered');
-  await page.getByRole('button',{name:'继续阅读',exact:true}).click();await page.locator('.prose h1').waitFor();
+  await page.locator('.continue-info>.primary').click();await page.locator('.prose h1').waitFor();
   await page.locator('.prose').evaluate(el=>{const walker=document.createTreeWalker(el,NodeFilter.SHOW_TEXT);let n;while(n=walker.nextNode()){const at=n.textContent.indexOf('resilient');if(at>=0){const r=document.createRange();r.setStart(n,at);r.setEnd(n,at+9);const s=getSelection();s.removeAllRanges();s.addRange(r);el.dispatchEvent(new MouseEvent('mouseup',{bubbles:true}));break;}}});
-  await page.locator('.definition-block').waitFor();assert.ok((await page.locator('.definition-block').innerText()).length>5);
+  await page.locator('.definition-block').waitFor();assert.ok((await page.locator('.definition-block').innerText()).length>5);await page.locator('.translation-actions').getByRole('button',{name:'加入词本',exact:true}).click();await page.locator('.translation-actions').getByRole('button',{name:'已添加',exact:true}).waitFor();
   const state=await page.evaluate(()=>window.mem.boot());assert.equal(state.entries.length,1);assert.ok(state.entries[0].context.includes('resilient'));assert.ok(state.entries[0].definition);
   await page.screenshot({path:path.join(shots,'02-reading.png')});console.log('Selection, offline definition and original sentence saved');
   await page.getByRole('button',{name:'将整句加入生词本'}).click();await expect.poll(()=>page.evaluate(async()=>(await window.mem.boot()).entries.length)).toBe(2);
-  await page.locator('.translation-content').getByRole('button',{name:'添加批注',exact:true}).click();await page.getByRole('textbox',{name:'批注内容'}).fill('Remember this example.');await page.getByRole('button',{name:'保存批注',exact:true}).click();await page.getByRole('button',{name:'添加书签',exact:true}).click();
+  await page.getByRole('toolbar',{name:'选中文本操作'}).getByRole('button',{name:'批注选中文本',exact:true}).click();await page.getByRole('textbox',{name:'批注内容'}).fill('Remember this example.');await page.getByRole('button',{name:'保存批注',exact:true}).click();await page.getByRole('button',{name:'添加书签',exact:true}).click();
   await page.getByRole('button',{name:'返回书架',exact:true}).click();
   const paths=['Learning.pdf','Learning.docx','Learning.epub'].map(f=>path.join(__dirname,'fixtures',f));
   await page.evaluate(paths=>window.mem.importBooks(paths),paths);await page.reload();await page.getByRole('button',{name:'导入文档',exact:true}).waitFor();

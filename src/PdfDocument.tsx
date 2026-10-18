@@ -3,13 +3,14 @@ import * as pdfjs from 'pdfjs-dist';
 import type {Book,Mark,AnnotationPreview,ReaderControl,ReaderMeta,SelectionInfo,Settings} from './types';
 import {annotationRange,rangeAtPoint} from './annotations';
 import {selectionFromDoc} from './selection';
+import {wordAt,interactiveTarget} from './wordAt';
 import {paintHighlights,clearHighlights} from './highlights';
 import {installPdfDragSelection} from './pdfSelection';
 import {fontStack} from './fonts';
 import {t} from './i18n';
 import {buildPdfReflow,renderPdfFigures,type PdfReflow} from './pdfReflow';
 type Content=Awaited<ReturnType<pdfjs.PDFPageProxy['getTextContent']>>;
-interface Props{doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];preview:AnnotationPreview|null;onRanges:(ranges:Map<string,Range>,preview:Range|null)=>void;speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
+interface Props{onWordClick:(info:SelectionInfo)=>void;doc:pdfjs.PDFDocumentProxy;book:Book;settings:Settings;zoom:number;notes:Mark[];preview:AnnotationPreview|null;onRanges:(ranges:Map<string,Range>,preview:Range|null)=>void;speechText:string;surface:React.RefObject<HTMLDivElement|null>;control:React.MutableRefObject<ReaderControl|null>;onMeta:(meta:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(selection:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onNavigate:()=>void;onDismissSelection:()=>void;onError:(message:string)=>void}
 export default function PdfDocument(props:Props){
   const root=useRef<HTMLDivElement>(null),current=useRef(props);current.current=props;
   const [pages,setPages]=useState<pdfjs.PDFPageProxy[]>([]),[texts,setTexts]=useState<Content[]|null>(null),[width,setWidth]=useState(800),[loading,setLoading]=useState(true);
@@ -45,8 +46,10 @@ export default function PdfDocument(props:Props){
     nextText:async()=>{const next=active.current+1;if(next>props.doc.numPages)return null;const text=await pageText(next);go(next);return text;},peekNextText:()=>active.current<props.doc.numPages?pageText(active.current+1):Promise.resolve(null),highlight:paintNotes,clearSelection:()=>document.getSelection()?.removeAllRanges(),locate,
     search:async query=>{const result=[];for(let index=1;index<=props.doc.numPages;index++){const text=await pageText(index),at=text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());if(at>=0)result.push({label:t('第')+' '+index+' '+t('页'),location:index,excerpt:text.slice(Math.max(0,at-65),at+150)});if(result.length>=80)break;}return result;}};return()=>{props.control.current=null;};},[pages.length,props.doc]);
   useEffect(()=>root.current?installPdfDragSelection(root.current):undefined,[props.doc,props.settings.pdfTextMode]);
-  function select(){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
-    if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark)current.current.onAnnotation(mark);else current.current.onDismissSelection();return;}
+  function select(event:React.MouseEvent){const selection=document.getSelection();if(!selection?.anchorNode||!root.current?.contains(selection.anchorNode))return;const element=selection.anchorNode.parentElement?.closest<HTMLElement>('[data-pdf-page]');if(!element)return;
+    if(selection.isCollapsed){const mark=current.current.notes.find(note=>note.id===lastClicked.current);if(mark){current.current.onAnnotation(mark);return;}
+      const hit=!interactiveTarget(event.target)&&root.current?wordAt(document,event.clientX,event.clientY,root.current,range=>Number(range.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage)||1):null;
+      if(hit){selection.removeAllRanges();selection.addRange(hit.range);current.current.onWordClick(hit.info);}else current.current.onDismissSelection();return;}
     const info=selectionFromDoc(document,element.textContent||'',Number(element.dataset.pdfPage));if(info)current.current.onSelection(info);
   }
   const lastClicked=useRef<string|null>(null);

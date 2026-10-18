@@ -13,16 +13,27 @@ import {onSelectionClick} from './selectionEvents';
 import {sentenceFor,selectionFromDoc} from './selection';
 import {annotationRange,rangeAtPoint,selectionStart} from './annotations';
 import {paintHighlights,clearHighlights} from './highlights';
+import {paintVocabulary} from './vocabularyMarks';
+import {wordAt,interactiveTarget} from './wordAt';
 export {sentenceFor} from './selection';
 import type {Book,Settings,Mark,AnnotationPreview,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorker;
 function flattenToc(items:any[],depth=0):ReaderMeta['toc'] {return items.flatMap(item=>[{label:item.label?.trim()||item.title||'章节',href:item.href||'',depth},...flattenToc(item.subitems||[],depth+1)]);}
-interface Props {active:boolean;book:Book;settings:Settings;notes:Mark[];preview:AnnotationPreview|null;annotationId:string|null;onAnnotationOrder:(ids:string[])=>void;renderAnnotations:(ids:string[])=>React.ReactNode;onCloseAnnotations:()=>void;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
+interface Props {onWordClick:(info:SelectionInfo)=>void;active:boolean;book:Book;settings:Settings;vocabulary:Set<string>;notes:Mark[];preview:AnnotationPreview|null;annotationId:string|null;onAnnotationOrder:(ids:string[])=>void;renderAnnotations:(ids:string[])=>React.ReactNode;onCloseAnnotations:()=>void;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
 export default function Reader(props:Props) {
   const {book,settings,control,onMeta,onProgress,onSelection,onError,onTitle}=props;
   const mount=useRef<HTMLDivElement>(null), current=useRef(props);current.current=props;
-  const [busy,setBusy]=useState(true),[html,setHtml]=useState(''),[pdfDoc,setPdfDoc]=useState<pdfjs.PDFDocumentProxy|null>(null);
+  const [busy,setBusy]=useState(true),[html,setHtml]=useState(''),[pdfDoc,setPdfDoc]=useState<pdfjs.PDFDocumentProxy|null>(null),spokenBlock=useRef(-1),clickedWord=useRef<{doc:Document;text:string;time:number}|null>(null);
   const pdf=useRef<any>(null),epub=useRef<any>(null),rendition=useRef<any>(null),lastHover=useRef('');
+  // Repaint vocabulary underlines when pages render, EPUB chapters load, or the word list or theme changes.
+  useEffect(()=>{
+    const root=container.current;if(!root)return;let timer:ReturnType<typeof setTimeout>|undefined;const hooked=new WeakSet<HTMLIFrameElement>();
+    const paint=()=>{const color=getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#5c6cc7';paintVocabulary(root,props.vocabulary,color);
+      for(const frame of root.querySelectorAll('iframe')){if(!hooked.has(frame)){hooked.add(frame);frame.addEventListener('load',schedule);}const body=frame.contentDocument?.body;if(body)paintVocabulary(body,props.vocabulary,color);}};
+    const schedule=()=>{clearTimeout(timer);timer=setTimeout(paint,250);};
+    const observer=new MutationObserver(schedule);observer.observe(root,{childList:true,subtree:true});schedule();
+    return()=>{clearTimeout(timer);observer.disconnect();for(const frame of root.querySelectorAll('iframe'))frame.removeEventListener('load',schedule);};
+  },[props.vocabulary,settings.theme,settings.colorThemes,html,pdfDoc]);
   const container=useRef<HTMLDivElement>(null),hoverTimer=useRef<ReturnType<typeof setTimeout>|null>(null),initialLocation=useRef(book.location);
   const busyRef=useRef(busy);busyRef.current=busy;
   const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubRanges=useRef(new Map<Document,Map<string,Range>>());
@@ -69,8 +80,8 @@ export default function Reader(props:Props) {
         if(metadata.title&&book.title!==metadata.title)onTitle(metadata.title);
         const navigation=await b.loaded.navigation;void b.locations.generate(1600).catch(()=>{});
         const r:any=b.renderTo(mount.current!,{width:'100%',height:'100%',flow:'paginated',spread:'none',allowScriptedContent:false});rendition.current=r;
-        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});onSelectionClick(contents.document,(event,newSelection)=>{if(!current.current.active||newSelection)return;const id=rangeAtPoint(epubRanges.current.get(contents.document)||new Map(),event.clientX,event.clientY),note=current.current.notes.find(note=>note.id===id);if(note)current.current.onAnnotation(note);else current.current.onDismissSelection();});contents.document.addEventListener('mousemove',(event:MouseEvent)=>hoverWord(contents.document,event.clientX,event.clientY,contents.document.body,range=>contents.cfiFromRange(range)));});
-        r.on('selected',(cfi:string,contents:any)=>{if(!current.current.active)return;const selection=selectionFromDoc(contents.document,contents.document.body.innerText,cfi,cfi);if(selection)current.current.onSelection(selection);});
+        r.hooks.content.register((contents:any)=>{contents.document.addEventListener('wheel',wheelPage,{passive:false});onSelectionClick(contents.document,(event,newSelection)=>{if(!current.current.active||newSelection)return;const id=rangeAtPoint(epubRanges.current.get(contents.document)||new Map(),event.clientX,event.clientY),note=current.current.notes.find(note=>note.id===id);if(note){current.current.onAnnotation(note);return;}const hit=!interactiveTarget(event.target)?wordAt(contents.document,event.clientX,event.clientY,contents.document.body,pointLocation,range=>contents.cfiFromRange(range)):null;if(!hit){current.current.onDismissSelection();return;}const native=contents.document.getSelection();native?.removeAllRanges();native?.addRange(hit.range);clickedWord.current={doc:contents.document,text:hit.info.text,time:Date.now()};current.current.onWordClick(hit.info);});contents.document.addEventListener('mousemove',(event:MouseEvent)=>hoverWord(contents.document,event.clientX,event.clientY,contents.document.body,range=>contents.cfiFromRange(range)));});
+        r.on('selected',(cfi:string,contents:any)=>{if(!current.current.active)return;const clicked=clickedWord.current;if(clicked&&clicked.doc===contents.document&&Date.now()-clicked.time<1500&&contents.document.getSelection()?.toString().trim()===clicked.text){clickedWord.current=null;return;}const selection=selectionFromDoc(contents.document,contents.document.body.innerText,cfi,cfi);if(selection)current.current.onSelection(selection);});
         r.on('relocated',(loc:any)=>{if(!alive)return;markText();if(!current.current.active)return;current.current.onProgress(loc.start.cfi,b.locations.length()?b.locations.percentageFromCfi(loc.start.cfi):((loc.start.index||0)/Math.max(1,(b.spine as any).spineItems.length)));current.current.onMeta({index:loc.start.displayed.page,count:loc.start.displayed.total,toc:flattenToc(navigation.toc)});});
         const colors=getPalette(current.current.settings);
         r.themes.default({'body':{'font-family':fontStack(settings.readingFont,settings.fontFamily==='serif'),'font-size':settings.fontSize+'px','line-height':String(settings.lineHeight),color:colors.readingText,background:colors.paper,padding:'24px 44px !important'},'body *':{'font-family':'inherit !important'},'p':{'margin-bottom':'1em'},'a':{color:colors.accentText},'::selection':{background:colors.selection}});
@@ -111,37 +122,38 @@ export default function Reader(props:Props) {
   useEffect(()=>{
     const mountEl=mount.current;if(!mountEl)return;
     for(const el of mountEl.querySelectorAll('.speaking'))el.classList.remove('speaking');
-    if(!props.speechText)return;
-    const blocks=mountEl.querySelectorAll('p,li,h1,h2,h3,blockquote');const found=[...blocks].find(el=>el.textContent?.replace(/\s+/g,' ').includes(props.speechText));
-    if(found){found.classList.add('speaking');found.scrollIntoView({behavior:'smooth',block:'center'});}
+    if(!props.speechText){spokenBlock.current=-1;return;}
+    const blocks=[...mountEl.querySelectorAll('p,li,h1,h2,h3,blockquote')],has=(el:Element)=>!!el.textContent?.replace(/\s+/g,' ').includes(props.speechText);
+    // Search forward from the paragraph being read: short cues such as "Mrs." also occur earlier in the text.
+    let at=blocks.findIndex((el,index)=>index>=Math.max(0,spokenBlock.current)&&has(el));if(at<0)at=blocks.findIndex(has);if(at<0)return;
+    blocks[at].classList.add('speaking');if(at!==spokenBlock.current)blocks[at].scrollIntoView({behavior:'smooth',block:'center'});spokenBlock.current=at;
   },[props.speechText]);
   useEffect(()=>{if(!props.active)return;const r=rendition.current;if(r&&book.location)void r.display(book.location).catch((error:Error)=>current.current.onError(error.message));},[props.active]);
   function onMouseUp(event:React.MouseEvent){
     if(book.format==='epub'||book.format==='pdf')return;const sel=window.getSelection();if(!sel?.anchorNode||!mount.current?.contains(sel.anchorNode))return;
-    if(sel.isCollapsed){const id=rangeAtPoint(ranges.current,event.clientX,event.clientY),mark=current.current.notes.find(n=>n.id===id);if(mark)current.current.onAnnotation(mark);else current.current.onDismissSelection();return;}
+    if(sel.isCollapsed){const id=rangeAtPoint(ranges.current,event.clientX,event.clientY),mark=current.current.notes.find(n=>n.id===id);if(mark){current.current.onAnnotation(mark);return;}
+      // A plain click on a word looks it up; a click on blank space closes the selection.
+      const hit=!interactiveTarget(event.target)&&mount.current?wordAt(document,event.clientX,event.clientY,mount.current,pointLocation):null;
+      if(hit){sel.removeAllRanges();sel.addRange(hit.range);current.current.onWordClick(hit.info);}else current.current.onDismissSelection();return;}
     const info=selectionFromDoc(document,mount.current?.innerText||'',container.current?.scrollTop||0);if(info)onSelection(info);
   }
+  // Hover, click and PDF/EPUB lookups resolve locations the same way.
+  const pointLocation=(range:Range)=>book.format==='pdf'?Number(range.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage)||1:container.current?.scrollTop||0;
   function hoverWord(doc:Document,x:number,y:number,scope:Element,cfiFor?:(range:Range)=>string){
     if(hoverTimer.current)clearTimeout(hoverTimer.current);
     if(!current.current.active||!current.current.settings.hoverTranslate||doc.getSelection()?.toString())return;
     hoverTimer.current=setTimeout(()=>{
       if(!current.current.active||!current.current.settings.hoverTranslate)return;
-      const caret=(doc as any).caretRangeFromPoint(x,y) as Range|null;if(!caret||caret.startContainer.nodeType!==3||!scope.contains(caret.startContainer))return;
-      const text=caret.startContainer.textContent||'',offset=caret.startOffset;const seg=new Intl.Segmenter(/[\u3400-\u9fff]/.test(text)?'zh':'en',{granularity:'word'});
-      const word=[...seg.segment(text)].find(s=>s.isWordLike&&offset>=s.index&&offset<s.index+s.segment.length);if(!word)return;
-      const range=doc.createRange();range.setStart(caret.startContainer,word.index);range.setEnd(caret.startContainer,word.index+word.segment.length);
-      const root=caret.startContainer.parentElement?.closest('[data-annotation-root],.textLayer,.prose')||(cfiFor?scope:null);if(!root)return;
-      const anchor=selectionStart(root,range),contextRoot=caret.startContainer.parentElement?.closest('p,li')||root,contextAnchor=selectionStart(contextRoot,range);
-      const context=sentenceFor(contextAnchor.text,word.segment,contextAnchor.start);
-      const cfi=cfiFor?.(range),location=cfi||(book.format==='pdf'?Number(caret.startContainer.parentElement?.closest<HTMLElement>('[data-pdf-page]')?.dataset.pdfPage)||1:container.current?.scrollTop||0),key=[location,anchor.start,word.segment,context].join('|');
+      const hit=wordAt(doc,x,y,scope,pointLocation,cfiFor);if(!hit)return;
+      const {info}=hit,key=[info.location,info.start,info.text,info.context].join('|');
       if(lastHover.current===key)return;lastHover.current=key;
-      current.current.onSelection({text:word.segment,context,start:anchor.start,location,cfi,kind:'word'});
+      current.current.onSelection(info);
     },700);
   }
   function onMouseMove(e:React.MouseEvent){if(book.format!=='epub'&&container.current)hoverWord(document,e.clientX,e.clientY,container.current);}
   function onScroll(){if(book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
   return <div className="reader-document-area"><div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
-    {busy&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
-    {book.format==='pdf'?pdfDoc&&<PdfDocument doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} onRanges={(next,draftRange)=>{ranges.current=next;previewRange.current=draftRange;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));setAnnotationRevision(value=>value+1);}} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
+    {busy&&!(book.format==='pdf'&&pdfDoc)&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
+    {book.format==='pdf'?pdfDoc&&<PdfDocument onWordClick={info=>current.current.onWordClick(info)} doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} onRanges={(next,draftRange)=>{ranges.current=next;previewRange.current=draftRange;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));setAnnotationRevision(value=>value+1);}} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
   </div><ReaderAnnotations surface={container} notes={props.notes} preview={props.preview} activeId={props.annotationId} revision={annotationRevision} getRanges={()=>({ranges:book.format==='epub'?new Map([...epubRanges.current.values()].flatMap(ranges=>[...ranges])):ranges.current,preview:previewRange.current})} onOpen={props.onAnnotation} onClose={props.onCloseAnnotations} render={props.renderAnnotations}/></div>;
 }

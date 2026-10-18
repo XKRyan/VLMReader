@@ -1,0 +1,8 @@
+{
+  "headwords": 702336,
+  "records": 1459729,
+  "builtAt": "2026-10-17",
+  "source": "https://huggingface.co/datasets/cluesurf/wiktionary-english",
+  "license": "CC BY-SA 4.0",
+  "seconds": 85
+}

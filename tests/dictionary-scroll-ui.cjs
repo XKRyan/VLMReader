@@ -6,7 +6,7 @@ const seed=new Store(profile);seed.state.settings={...seed.state.settings,langua
 const executable=process.env.MEMREADER_EXE||require('electron'),errors=[];let app;
 async function loadWord(page,word){
  await page.getByRole('textbox',{name:'Word to look up',exact:true}).fill(word);await page.getByRole('button',{name:'Look up',exact:true}).click();
- await page.locator('.dictionary-title h2').filter({hasText:word}).waitFor();await page.locator('.dictionary-collocations').waitFor();
+ await page.locator('.dictionary-title h2').filter({hasText:word}).waitFor();await page.locator('.dictionary-details details:has(.dictionary-collocations)>summary').click();await page.locator('.dictionary-collocations').waitFor();
  await page.locator('.word-details summary').filter({hasText:'Word forms'}).waitFor();
 }
 async function waitForScrollToSettle(region){
@@ -19,12 +19,12 @@ async function waitForScrollToSettle(region){
  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));await page.getByRole('button',{name:'Dictionary',exact:true}).waitFor();
  await app.evaluate(({BrowserWindow})=>{const w=BrowserWindow.getAllWindows()[0];w.setSize(1400,900);w.showInactive();});
  await page.getByRole('button',{name:'Dictionary',exact:true}).click();await loadWord(page,'clinic');
- const region=page.locator('.dictionary-page'),topbar=page.locator('.topbar'),sidebar=page.locator('.app-sidebar');
+ const region=page.locator('.dictionary-page'),topbar=page.locator('.window-titlebar'),sidebar=page.locator('.app-sidebar');
  const originalBar=await topbar.boundingBox(),originalSide=await sidebar.boundingBox();
  const bounds=await region.boundingBox();await page.mouse.move(bounds.x+bounds.width*.45,Math.min(bounds.y+150,850));await page.mouse.wheel(0,650);
  if(blocked){
   await page.waitForTimeout(250);assert.equal(await region.evaluate(el=>el.scrollTop),0);
-  const save=await page.locator('.dictionary-save').boundingBox();assert.ok(save.y>await page.evaluate(()=>innerHeight));
+  const save=await page.locator('.dictionary-title-actions').boundingBox();assert.ok(save.y>await page.evaluate(()=>innerHeight));
   console.log('REPRODUCED: clinic results are clipped and cannot scroll in the previous EXE.');return;
  }
  await expect.poll(()=>region.evaluate(el=>el.scrollTop)).toBeGreaterThan(200);
@@ -35,7 +35,7 @@ async function waitForScrollToSettle(region){
   await page.getByRole('button',{name:'Settings',exact:true}).click();await page.getByRole('combobox',{name:'Interface text size',exact:true}).selectOption(String(size.font));await expect.poll(()=>page.evaluate(()=>getComputedStyle(document.documentElement).getPropertyValue('--ui-font-size').trim())).toBe(size.font+'px');await page.getByRole('button',{name:'Dictionary',exact:true}).click();await loadWord(page,'clinic');
   console.log('Checking layout '+JSON.stringify(size));
   await region.evaluate(el=>el.scrollTo(0,0));await waitForScrollToSettle(region);
-  const primaryAction=await page.locator('.dictionary-save').evaluate(el=>{const rect=el.getBoundingClientRect(),region=el.closest('.dictionary-page').getBoundingClientRect(),definition=el.parentElement.querySelector('.definition-block');return {top:rect.top,bottom:rect.bottom,viewportTop:region.top,viewportBottom:region.bottom,beforeDefinition:!!(el.compareDocumentPosition(definition)&Node.DOCUMENT_POSITION_FOLLOWING)};});
+  const primaryAction=await page.locator('.dictionary-title-actions').evaluate(el=>{const rect=el.getBoundingClientRect(),region=el.closest('.dictionary-page').getBoundingClientRect(),definition=el.closest('.dictionary-result').querySelector('.definition-block');return {top:rect.top,bottom:rect.bottom,viewportTop:region.top,viewportBottom:region.bottom,beforeDefinition:!!(el.compareDocumentPosition(definition)&Node.DOCUMENT_POSITION_FOLLOWING)};});
   assert.ok(primaryAction.beforeDefinition,'Destination and save action must precede lengthy definitions');assert.ok(primaryAction.top>=primaryAction.viewportTop&&primaryAction.bottom<=primaryAction.viewportBottom+1,'Save action must be reachable at the top of each dictionary result');
   await region.focus();await page.keyboard.press('PageDown');await expect.poll(()=>region.evaluate(el=>el.scrollTop)).toBeGreaterThan(150);await waitForScrollToSettle(region);
   const currentBounds=await region.boundingBox();await page.mouse.move(currentBounds.x+currentBounds.width*.45,currentBounds.y+currentBounds.height*.5);await page.mouse.wheel(0,10000);

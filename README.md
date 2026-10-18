@@ -13,13 +13,13 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 
 ## 启动
 
-**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.9-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
+**安装版：**从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-Setup-0.6.16-x64.msi`，双击按向导安装，可选择目录。默认优先使用 `D:\VLMReader`，没有 D 盘时使用当前用户的应用目录。安装后可通过桌面或开始菜单启动，在 Windows“已安装的应用”中卸载。离线词典和语音模型已包含，安装时无需另外下载。
 
 安装版和便携版使用相同的 `data` 资料目录。选择原便携版根目录即可延续已有资料，安装前请先退出阅读器。安装与覆盖升级不改写 `data`；卸载保留文档、生词、批注、设置和语音缓存，也保留安装目录中与程序无关的文件。
 
 **便携版：**
 
-从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.9-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
+从 [GitHub Releases](https://github.com/XKRyan/VLMReader/releases/latest) 下载 `VLMReader-0.6.16-windows-x64.zip`，完整解压后双击 `VLMReader.cmd`。发布包已包含离线词典和语音模型，无需另行下载；请保留 `release\win-unpacked` 的文件夹结构，个人资料会保存在解压目录下的 `data`。
 
 双击 `VLMReader.lnk`，或运行 `release\win-unpacked\VLMReader.exe`。程序无需安装。不要单独移走 exe；它需要同文件夹中的资源。首次启动可阅读欢迎文档。
 
@@ -28,8 +28,8 @@ VLMReader 是一款面向双语阅读与学习的 Windows 阅读器，支持 PDF
 - 阅读时点击顶部工具栏的“导出”（Export），保存 `.vlmbook` 文件。原文、内嵌或已保存的图片、高亮颜色、批注与书签一起保留；对方用 VLMReader 0.6.7 或更新版本的“导入文档”打开即可，也可以直接拖入。它是专用分享格式，不能在 Word 等其他阅读器直接打开；不包含生词本、学习记录或 API 设置。重复导入相同内容不会重复建书或重复添加相同批注，也不会覆盖已有批注。
 - 在“生词本 → 管理”中勾选条目，选择目标词本，再点击“移动所选”。条目从当前词本移出，保留其他词本归属、原句、笔记与全部复习进度；成功后可直接查看目标词本。“全部词条”等汇总视图需先选择具体来源词本。
 - 离线词典按需读取；语音任务结束、空闲一分钟后释放引擎内存，已缓存的音频仍可直接重播。旧词条整理结果会缓存，词义或词典变化后重新核对。
-- 内置 ECDICT 完整版约 340 万英汉词条与 176 万短语，CC-CEDICT 约 20 万汉英查询项；Open English WordNet 提供英英释义、同义词和已有例句。词典显示专业领域释义、词形与搭配。AI 用法及专业释义补充按需生成，标注来源并本地缓存；中文查询的补充侧重相应英文表达、搭配和英文例句。
-- 在“查单词”或设置中点击“管理词典”，可以添加、编辑自己的词条，或导入未加密的 MOBI7、CSV、TSV、JSON 和 StarDict（.ifo/.idx/.dict，支持压缩索引与 .dict.dz）。自定义词典优先显示，也保留内置词典结果；可启用、停用或删除，词本与复习记录不受影响。详见 [词典导入格式](docs/dictionaries.md)。
+- 内置 ECDICT 完整版约 340 万英汉词条与 176 万短语，CC-CEDICT 约 20 万汉英查询项；Open English WordNet 与 English Wiktionary 提供英英释义、同义词和已有例句。词典显示专业领域释义、词形与搭配；内置来源可以逐项启用或停用。AI 用法及专业释义补充按需生成，标注来源并本地缓存；中文查询的补充侧重相应英文表达、搭配和英文例句。
+- 在“查单词”或设置中点击“管理词典”，可以添加、编辑自己的词条，或导入未加密的 MOBI7、MDX、CSV、TSV、JSON 和 StarDict（.ifo/.idx/.dict，支持压缩索引与 .dict.dz）。MDX 采用流式导入，支持 1.2 / 2.0 引擎、UTF-8 / UTF-16 与无压缩 / zlib / LZO 块，索引加密的商业词典也能读取；导入时会把 LDOCE 类排版解析成义项、例句与搭配。自定义词典优先显示，也保留内置词典结果；可启用、停用或删除，词本与复习记录不受影响。查词主页保留最近查过的词，可一键重查或清空。详见 [词典导入格式](docs/dictionaries.md)。
 
 - 阅读区底部可直接减小、增大字号，并显示当前字号；点击字号可打开字体、行距与内容宽度设置。原版 PDF 保留缩放滑块。
 - 导入 PDF、EPUB、DOCX、TXT、Markdown 或 HTML；支持拖入文件、搜索、目录、阅读进度、收藏、书签与打印。PDF 原版和文字模式均连续滚动，各页自然衔接，跨页不会跳到页首；EPUB 支持滚轮翻页。

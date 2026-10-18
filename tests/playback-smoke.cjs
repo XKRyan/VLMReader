@@ -15,8 +15,8 @@ const root=path.resolve(__dirname,'..');
   assert.equal(await page.locator('.reader-footer>span').first().innerText(),'第 1 / 2 页');
   await page.getByRole('slider',{name:'朗读速度',exact:true}).press('End');assert.equal((await page.evaluate(()=>window.mem.boot())).settings.rate,3);
   await page.getByRole('button',{name:'开始朗读',exact:true}).click();await page.getByText('第 2 / 2 页',{exact:true}).waitFor({timeout:30000});
-  await page.locator('.audio-info strong').filter({hasText:'听一听，让文字有声音'}).waitFor({timeout:30000});
-  assert.ok((await page.locator('.textLayer').innerText()).includes('Second page'));
+  await page.locator('.audio-info strong').filter({hasText:'离线朗读'}).waitFor({timeout:30000});
+  assert.ok((await page.locator('.textLayer').allInnerTexts()).join(' ').includes('Second page'));
   console.log('Real audio playback, pause/resume, continuous speed adjustment and automatic next-page reading passed');
  }finally{await app.close();}
 })().catch(e=>{console.error(e);process.exitCode=1;});

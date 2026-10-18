@@ -16,7 +16,8 @@ function saveNotebook(store,input,id){
   if(!name||name.length>60)throw Error('词本名称需为 1–60 个字符');
   if(state.notebooks.some(book=>book.id!==id&&book.name.toLocaleLowerCase()===name.toLocaleLowerCase()))throw Error('已经有同名词本');
   if(!Array.isArray(input.bookIds)||input.bookIds.some(bookId=>!state.books.some(book=>book.id===bookId)))throw Error('请选择书架中的文档');
-  const notebook={id:id||crypto.randomUUID(),createdAt:existing?.createdAt||new Date().toISOString(),name,bookIds:[...new Set(input.bookIds)],...(existing?.system?{system:existing.system}:{})};
+  if(input.kind!==undefined&&!['personal','wordlist'].includes(input.kind))throw Error('词本类型无效');
+  const notebook={id:id||crypto.randomUUID(),createdAt:existing?.createdAt||new Date().toISOString(),name,bookIds:[...new Set(input.bookIds)],kind:input.kind||existing?.kind||'personal',...(existing?.system?{system:existing.system}:{})};
   const sources=new Set(notebook.bookIds);
   const entries=input.includeExisting?state.entries.map(entry=>sources.has(entry.bookId)||(entry.contexts||[]).some(context=>sources.has(context.bookId))?{...entry,notebookIds:[...new Set([...(entry.notebookIds||[]),notebook.id])]}:entry):state.entries;
   store.replaceState({...state,entries,notebooks:existing?state.notebooks.map(book=>book.id===id?notebook:book):[...state.notebooks,notebook]});

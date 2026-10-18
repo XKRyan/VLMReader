@@ -7,11 +7,12 @@ const {Store,DEFAULTS}=require('./store.cjs');
 const {getPalette,sanitizeColorThemes}=require('./palette.cjs');
 const {notebookIds,collectMembership,saveNotebook,deleteNotebook,assignEntries,moveEntries,mergeBackup}=require('./notebooks.cjs');
 const {Dictionary}=require('./dictionary.cjs');
+const {DictionaryHistory}=require('./dictionary-history.cjs');
 const {createRichDictionary}=require('./dictionary-rich.cjs');
 const {saveAnnotation,updateAnnotation,deleteAnnotation,validateColor}=require('./annotations.cjs');
 const {createWordbookService}=require('./wordbooks.cjs');
 const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
-const {REVIEW_METHODS,isUnreviewed}=require('../shared/review-policy.mjs');
+const {REVIEW_METHODS,isUnreviewed,inNotebook,wordlistIds}=require('../shared/review-policy.mjs');
 const {translate,validateBase}=require('./translation.cjs');
 const {convertDocx}=require('./docx.cjs');
 const {createClozeService}=require('./cloze.cjs');
@@ -31,6 +32,8 @@ app.setPath('userData',path.join(dataDir,'runtime'));
 if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
 const dictionary=new Dictionary(assets,dataDir);
+dictionary.setSources(store.state.settings.dictionarySources);
+const dictionaryHistory=new DictionaryHistory(dataDir);
 const {repairDictionaryEntries}=require('./dictionary-policy.cjs');
 let dictionaryRepair;
 const ensureDictionaryRepair=()=>dictionaryRepair||=(repairDictionaryEntries(store,dictionary).catch(error=>{dictionaryRepair=null;throw error;}));
@@ -85,6 +88,12 @@ app.whenReady().then(async()=>{
   updateChrome();
   main.webContents.on('before-input-event',(event,input)=>{if(input.type!=='keyDown')return;if((input.control||input.meta)&&input.key.toLowerCase()==='o'){event.preventDefault();main.webContents.send('import-request');}if(input.key==='F11'){event.preventDefault();main.setFullScreen(!main.isFullScreen());}});
   const handle=(channel,fn)=>ipcMain.handle(channel,(_event,...args)=>fn(...args));
+  // Words that no offline dictionary covers are kept in the AI 补充 section after an AI translation.
+  async function rememberAiWord(found){
+    if(!found?.word||!found.translation||!dictionary.custom)return;
+    const known=await dictionary.lookup(found.word).catch(()=>null);if(known&&known.source!=='AI 补充')return;
+    try{dictionary.custom.saveAi(found);}catch{/* A rejected AI entry must not fail the translation itself. */}
+  }
   handle('boot',async()=>{await ensureDictionaryRepair();return safeState();});
   handle('books:import',importBooks);
   handle('books:export-annotated',async id=>{
@@ -116,15 +125,22 @@ app.whenReady().then(async()=>{
   handle('wordbooks:list',()=>wordbooks.list());
   handle('wordbooks:preview',async(input={})=>{if(!input.path&&!input.builtin){const result=await dialog.showOpenDialog(main,{properties:['openFile'],filters:[{name:ui('词书','Word lists'),extensions:['csv','tsv','txt','xlsx','json']}]});if(result.canceled)return null;input={path:result.filePaths[0]};}return wordbooks.preview(input);});
   handle('wordbooks:import',(token,input)=>wordbooks.commit(token,input));
+  handle('dictionary:custom-gloss',text=>dictionary.customGloss(String(text).slice(0,150)))
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
+  handle('dictionary:history',()=>dictionaryHistory.list());
+  handle('dictionary:history-add',input=>dictionaryHistory.add(input));
+  handle('dictionary:history-clear',()=>dictionaryHistory.clear());
   handle('dictionary:rich',(word,generate)=>richDictionary(word,generate===true));
   handle('dictionaries:list',()=>dictionary.custom.list());
-  handle('dictionaries:preview',async file=>{if(!file){const selected=await dialog.showOpenDialog(main,{title:ui('导入自定义词典','Import dictionary'),properties:['openFile'],filters:[{name:ui('离线词典','Offline dictionaries'),extensions:['csv','tsv','json','ifo','mobi']}]});if(selected.canceled)return null;file=selected.filePaths[0];}return dictionary.custom.preview(file);});
+  handle('dictionaries:preview',async file=>{if(!file){const selected=await dialog.showOpenDialog(main,{title:ui('导入自定义词典','Import dictionary'),properties:['openFile'],filters:[{name:ui('离线词典','Offline dictionaries'),extensions:['csv','tsv','json','ifo','mobi','mdx']}]});if(selected.canceled)return null;file=selected.filePaths[0];}return dictionary.custom.preview(file);});
   handle('dictionaries:commit',(token,name)=>dictionary.custom.commit(token,name));
   handle('dictionaries:discard',token=>dictionary.custom.discard(token));
   handle('dictionaries:toggle',(id,enabled)=>dictionary.custom.update(id,enabled));
+  handle('dictionaries:move',(id,beforeId)=>dictionary.custom.move(id,beforeId));
   handle('dictionaries:delete',id=>dictionary.custom.remove(id));
   handle('dictionaries:personal',()=>dictionary.custom.personalEntries());
+  handle('dictionaries:ai',()=>dictionary.custom.aiEntries());
+  handle('dictionaries:ai-delete',word=>dictionary.custom.deleteAi(String(word)));
   handle('dictionaries:save',(entry,oldWord)=>dictionary.custom.savePersonal(entry,oldWord));
   handle('dictionaries:delete-word',word=>dictionary.custom.deletePersonal(word));
   handle('dictionary:ai-lookup',text=>lookupAI(text,store.state.settings,getKey()));
@@ -160,11 +176,11 @@ app.whenReady().then(async()=>{
     if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.cueWords=found.cueWords;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
     collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();libraryExamples.queue();return e;
   });
-  handle('entries:translate',async id=>{const e=entryById(id);const result=await translate(e.text,e.context,store.state.settings,getKey());const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
+  handle('entries:translate',async id=>{const e=entryById(id);const {dictionary:found,...result}=await translate(e.text,e.context,store.state.settings,getKey(),e.kind);await rememberAiWord(found);const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
   handle('entries:cloze',id=>clozeService.prepare(id));
   handle('entries:cloze-answer',(id,exerciseId,answer)=>clozeService.submit(id,exerciseId,answer));
   handle('entries:cloze-hint',(id,exerciseId)=>clozeService.hint(id,exerciseId));
-  handle('selection:translate',(text,context)=>translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey()));
+  handle('selection:translate',async(text,context,kind)=>{const result=await translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey(),kind==='word'?'word':'sentence');await rememberAiWord(result.dictionary);return result;});
   handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
   handle('entries:delete',id=>{store.deleteEntries([id]);libraryExamples.queue();return true;});
   handle('entries:delete-many',ids=>{const count=store.deleteEntries(ids);libraryExamples.queue();return count;});
@@ -184,16 +200,19 @@ app.whenReady().then(async()=>{
     const updates={...input};
     if('readerPanelWidth' in updates&&(!Number.isInteger(updates.readerPanelWidth)||updates.readerPanelWidth<280||updates.readerPanelWidth>760))throw Error('侧栏宽度需为 280–760px');
     if('theme' in updates&&!['paper','white','sage','night'].includes(updates.theme))throw Error('阅读主题无效');
+    if('readerPanelTab' in updates&&!['translation','marks'].includes(updates.readerPanelTab))throw Error('侧栏标签无效');
     if('annotationColor' in updates)validateColor(updates.annotationColor);
     if('colorThemes' in updates)updates.colorThemes=sanitizeColorThemes(updates.colorThemes,true);
     if('uiFontSize' in updates && (!Number.isInteger(updates.uiFontSize)||updates.uiFontSize<13||updates.uiFontSize>22))throw Error('界面字号需为 13–22px');
     if('reviewMethods' in updates&&(!Array.isArray(updates.reviewMethods)||!updates.reviewMethods.length||updates.reviewMethods.some(mode=>!REVIEW_METHODS.includes(mode))))throw Error('至少开启一种有效的复习方式');
     if('reviewMethods' in updates)updates.reviewMethods=REVIEW_METHODS.filter(mode=>updates.reviewMethods.includes(mode));
+    if('reviewCustomDictionary' in updates)updates.reviewCustomDictionary=updates.reviewCustomDictionary===true;
     if('vocabPageSize' in updates&&![10,20,50].includes(updates.vocabPageSize))throw Error('每页条数无效');
+    if('dictionarySources' in updates){const list=updates.dictionarySources;if(!Array.isArray(list)||list.some(id=>!Dictionary.SOURCES.includes(id)))throw Error('词典来源无效');updates.dictionarySources=Dictionary.SOURCES.filter(id=>list.includes(id));}
     if(updates.apiBase)updates.apiBase=validateBase(updates.apiBase);
     if('apiKey' in updates){const key=String(updates.apiKey).trim();if(key){if(!safeStorage.isEncryptionAvailable())throw Error('系统加密存储暂不可用');fs.writeFileSync(path.join(dataDir,'api-key.bin'),safeStorage.encryptString(key));}else{const p=path.join(dataDir,'api-key.bin');if(fs.existsSync(p))fs.unlinkSync(p);}delete updates.apiKey;}
     for(const key of Object.keys(DEFAULTS))if(key in updates && key!=='apiKeySet')store.state.settings[key]=updates[key];
-    store.save();if('language' in updates)updateMenu();if('theme' in updates||'colorThemes' in updates)updateChrome();return {...store.state.settings,apiKeySet:!!getKey()};
+    store.save();if('language' in updates)updateMenu();if('theme' in updates||'colorThemes' in updates)updateChrome();if('dictionarySources' in updates)dictionary.setSources(store.state.settings.dictionarySources);return {...store.state.settings,apiKeySet:!!getKey()};
   });
   handle('settings:test-api',()=>translate('Learning builds lasting understanding.','',store.state.settings,getKey()));
   handle('speech:generate',generateSpeech);
@@ -205,8 +224,8 @@ app.whenReady().then(async()=>{
   handle('window:print',()=>new Promise(resolve=>main.webContents.print({printBackground:true},(ok,reason)=>resolve({ok,reason}))));
   handle('data:open',()=>shell.openPath(dataDir));
   handle('data:export',async(type,notebookId)=>{
-    const csv=type==='csv';if(csv&&notebookId&&!['unfiled','unreviewed'].includes(notebookId)&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
-    const entries=csv&&notebookId?store.state.entries.filter(entry=>notebookId==='unfiled'?!entry.notebookIds.length:notebookId==='unreviewed'?entry.kind==='word'&&isUnreviewed(entry):entry.notebookIds.includes(notebookId)):store.state.entries;
+    const csv=type==='csv';if(csv&&notebookId&&!['unfiled','unreviewed','unreviewed-lists'].includes(notebookId)&&!store.state.notebooks.some(notebook=>notebook.id===notebookId))throw Error('词本不存在');
+    const lists=wordlistIds(store.state.notebooks),entries=csv&&notebookId?store.state.entries.filter(entry=>inNotebook(entry,notebookId,lists)):store.state.entries;
     const result=await dialog.showSaveDialog(main,{defaultPath:'VLMReader-'+new Date().toISOString().slice(0,10)+(csv?'.csv':'.json'),filters:[{name:csv?ui('CSV 生词本','CSV vocabulary'):ui('JSON 资料备份','JSON data backup'),extensions:[csv?'csv':'json']}]});
     if(result.canceled)return null;fs.writeFileSync(result.filePath,csv?vocabularyCsv(entries,store.state.settings):JSON.stringify(store.state,null,2),'utf8');return result.filePath;
   });

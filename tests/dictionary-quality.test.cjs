@@ -3,7 +3,7 @@ const {Dictionary}=require('../electron/dictionary.cjs'),{repairDictionaryEntrie
 const {createClozeService}=require('../electron/cloze.cjs'),{maskCue,semanticDefinition}=require('../shared/review-cues.mjs');
 const dictionary=new Dictionary(path.resolve(__dirname,'../assets'));
 test('the full dictionary adds specialist phrases, and WordNet examples and synonyms remain available offline',async()=>{
- const phrase=await dictionary.lookup('root mean square');assert.match(phrase.translation,/均方根/);const word=await dictionary.lookup('competence');assert.ok(word.collocations.some(item=>item.text.includes('competence')));assert.match(word.translation,/\[医\]/);const able=await dictionary.lookup('able');assert.ok(able.examples.some(item=>item.text.includes('able')));assert.ok((await dictionary.synonyms('competence')).some(item=>item.word==='competency'));
+ const phrase=await dictionary.lookup('root mean square');assert.match(phrase.translation,/均方根/);const word=await dictionary.lookup('competence');assert.ok(word.collocations.some(item=>item.text.includes('competence')));assert.match(word.domains,/\[医\]/);assert.doesNotMatch(word.translation,/\[医\]/);assert.doesNotMatch(word.phonetic,/[\u04d9']/);assert.match(word.phonetic,/\u02c8/);const able=await dictionary.lookup('able');assert.ok(able.examples.some(item=>item.text.includes('able')));assert.ok((await dictionary.synonyms('competence')).some(item=>item.word==='competency'));
 });
 function fixture(t){const dir=fs.mkdtempSync(path.join(os.tmpdir(),'vlm-dictionary-'));assert.ok(dir.startsWith(path.join(os.tmpdir(),'vlm-dictionary-')));t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));return new Store(dir);}
 function cachedRepairFixture(t){

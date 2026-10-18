@@ -1,6 +1,8 @@
 """Download published dictionaries/model; build a fast offline SQLite dictionary."""
-import csv, gzip, io, json, re, sqlite3, tarfile, urllib.request, time
+import csv, gzip, io, json, re, sqlite3, sys, tarfile, urllib.request, time
 from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dictionary_build
 ROOT = Path(__file__).resolve().parents[1]
 ASSETS = ROOT / 'assets'; DOWNLOADS = ROOT / 'downloads'
 ASSETS.mkdir(exist_ok=True); DOWNLOADS.mkdir(exist_ok=True)
@@ -24,33 +26,15 @@ def dictionaries():
     if target.exists(): return
     ec = download('https://raw.githubusercontent.com/skywind3000/ECDICT/master/ecdict.csv', 'ecdict.csv')
     cc = download('https://www.mdbg.net/chinese/export/cedict/cedict_1_0_ts_utf-8_mdbg.txt.gz', 'cedict.txt.gz')
-    db = sqlite3.connect(str(target.with_suffix('.building')))
-    db.executescript('PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; CREATE TABLE entries (word TEXT PRIMARY KEY COLLATE NOCASE, phonetic TEXT, definition TEXT, translation TEXT, tags TEXT, exchange TEXT, source TEXT); CREATE TABLE metadata (key TEXT PRIMARY KEY,value TEXT);')
-    en = 0
-    with ec.open(encoding='utf-8-sig', newline='') as f:
-        for row in csv.DictReader(f):
-            if not row.get('word'): continue
-            db.execute('INSERT OR REPLACE INTO entries VALUES (?,?,?,?,?,?,?)', (row['word'], row.get('phonetic',''), row.get('definition','').replace('\\n','\n'), row.get('translation','').replace('\\n','\n'), row.get('tag',''), row.get('exchange',''), 'ECDICT'))
-            en += 1
-    zh = {}; pattern = re.compile(r'^(\S+) (\S+) \[(.*?)\] /(.*)/$')
-    with gzip.open(cc, 'rt', encoding='utf-8') as f:
-        for line in f:
-            match = pattern.match(line.rstrip())
-            if not match: continue
-            trad, simp, py, meanings = match.groups()
-            definition = meanings.replace('/', '\n')
-            for word in dict.fromkeys([simp, trad]):
-                record = zh.setdefault(word, {'py': [], 'defs': []})
-                if py not in record['py']: record['py'].append(py)
-                if definition not in record['defs']: record['defs'].append(definition)
-    for word,r in zh.items():
-        meaning = '\n\n'.join(r['defs'])
-        db.execute('INSERT OR REPLACE INTO entries VALUES (?,?,?,?,?,?,?)', (word, ' / '.join(r['py']), meaning, meaning, '', '', 'CC-CEDICT'))
-    meta = {'enCount': en, 'zhCount': len(zh), 'builtAt': time.strftime('%Y-%m-%d'), 'sources': ['ECDICT (MIT)', 'CC-CEDICT (CC BY-SA 4.0)']}
-    db.execute('INSERT INTO metadata VALUES (?,?)', ('info', json.dumps(meta)))
-    db.commit(); db.execute('VACUUM'); db.close()
-    target.with_suffix('.building').replace(target)
-    (ASSETS / 'dictionary-info.json').write_text(json.dumps(meta,ensure_ascii=False),encoding='utf-8')
+    building = target.with_suffix('.building')
+    for stale in (building, Path(str(building) + '-journal')):
+        stale.unlink(missing_ok=True)
+    database = dictionary_build.open_database(building)
+    dictionary_build.insert_ecdict(database, ec, 'ECDICT')
+    dictionary_build.insert_cedict(database, cc)
+    meta = {**dictionary_build.summarise(database), 'builtAt': time.strftime('%Y-%m-%d'), 'edition': 'basic', 'sources': ['ECDICT (MIT)', 'CC-CEDICT (CC BY-SA 4.0)']}
+    dictionary_build.finish(database, target, building, meta)
+    (ASSETS / 'dictionary-info.json').write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding='utf-8')
     print('Dictionary ready', meta, flush=True)
     licensefile = download('https://raw.githubusercontent.com/skywind3000/ECDICT/master/LICENSE', 'ECDICT-LICENSE.txt')
     (ASSETS / 'ECDICT-LICENSE.txt').write_bytes(licensefile.read_bytes())

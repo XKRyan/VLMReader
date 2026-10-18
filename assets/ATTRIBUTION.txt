@@ -39,4 +39,8 @@ TOEFL / IELTS headwords are selected by the existing ECDICT exam tags (MIT). The
 
 MOBI7 binary-format reference: Kindling https://github.com/ciscoriordan/kindling (MIT).
 Parser implemented in JavaScript; no external converter is required. Reference license: MOBI-FORMAT-REFERENCE-LICENSE.txt.
+LZO1X-1 decoder: lzo1x https://github.com/mannesbrak/lzo1x (MIT), vendored unmodified at electron/vendor/lzo1x.cjs.
+License: electron/vendor/lzo1x.LICENSE.txt. It decompresses LZO blocks inside imported MDX dictionaries.
+MDX binary-format reference: writemdict https://github.com/zhansliu/writemdict (used only to cross-check the parser against reference files; no code bundled).
+English Wiktionary: https://en.wiktionary.org, CC BY-SA 4.0, parsed via https://huggingface.co/datasets/cluesurf/wiktionary-english. See wiktionary/ATTRIBUTION.txt.
 User-imported dictionaries, including American Heritage, are not bundled or redistributed.

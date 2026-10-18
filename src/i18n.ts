@@ -142,6 +142,7 @@ Object.assign(english,{
 Object.assign(english,{'确认导入':'Import'});
 Object.assign(english,{'请先保存或取消当前编辑':'Save or cancel your current edit first.'});
 Object.assign(english,{'自定义词典文件损坏或缺失，请从备份恢复':'Custom dictionary files are damaged or missing. Restore from your data backup.'});
+Object.assign(english,{'词频':'Frequency','柯林斯星级':'Collins rating','内置词典':'Built-in dictionaries','英汉 · 完整词库':'English → Chinese · full lexicon','最近查词':'Recent lookups','清空':'Clear','汉英 · 简繁体':'Chinese → English · simplified and traditional','英英 · 释义与例句':'English → English · definitions and examples','英英 · 义项与同义':'English → English · senses and synonyms','关掉内置词典后只使用你导入的词典。':'Turn these off to use only the dictionaries you import.','未启用中文词典，当前只显示英文释义。':'No Chinese dictionary is enabled, so only English definitions are shown.','支持 CSV、TSV、JSON、StarDict、未加密的 MOBI7 与 MDX 词典。完整原文单独保留，可展开查看。':'Supports CSV, TSV, JSON, StarDict, unencrypted MOBI7 and MDX dictionaries. Full articles are kept separately and can be expanded.','拖动可调整顺序，越靠前越优先显示。':'Drag to reorder; the first match is shown first.','词典顺序已保存':'Dictionary order saved','拖动排序':'Drag to reorder','上移':'Move up','下移':'Move down'});
 export function t(value:string):string{
   if(language==='zh')return value;
   if(english[value]!==undefined)return english[value];
@@ -166,3 +167,8 @@ Object.assign(english,{'在此处另写批注':'Add another annotation here'});
 Object.assign(english,{'导出':'Export','导出中…':'Exporting…'});
 
 Object.assign(english,{'造句练习已开启；配置 AI 密钥后才会安排。':'Sentence writing is enabled. Add an AI key to schedule it.','初学先练基础，再混合安排填空、拼写与造句。':'Start with the basics, then mix cloze, spelling and sentence writing.'});
+
+Object.assign(english,{'更多操作':'More actions','最近导入':'Recently added','开始阅读':'Start reading','没有符合条件的文档。':'No documents match.'});
+Object.assign(english,{'从这里朗读':'Read from here','从选中处开始朗读':'Read aloud from the selection','朗读进度':'Reading position','朗读倍速':'Reading speed','输入 0.5–3 之间的倍速':'Enter a speed from 0.5 to 3','回忆时使用自定义词典释义':'Use my dictionaries in recall','按「管理词典」中的顺序；未收录时使用词条释义':'Follows the order in Manage dictionaries; falls back to the saved meaning'});
+Object.assign(english,{'AI 补充':'AI supplement','AI 翻译过、其他词典都未收录的词，只在查不到时使用。':'Words translated by AI that no other dictionary covers; used only when nothing else matches.','显示更多':'Show more','语境释义 · AI':'Meaning in context · AI'});
+Object.assign(english,{'词表未复习':'Unreviewed (word lists)','我的生词本':'My vocabulary','词表':'Word lists','词本类型':'Notebook type','阅读、查词时一个个加入的词；阅读时标出其中未复习的词。':'Words you add one by one while reading or looking up; unreviewed ones are underlined while reading.','导入或既定的词表；复习时单独列出，不在阅读中标出。':'Imported or preset word lists; listed separately in review and not underlined while reading.'});

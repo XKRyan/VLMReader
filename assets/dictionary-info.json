@@ -1,13 +1,17 @@
 {
-  "enCount": 3403140,
-  "zhCount": 198379,
-  "builtAt": "2026-10-14",
+  "enCount": 3403176,
+  "zhCount": 198343,
+  "phonetic": 538937,
+  "domains": 209999,
+  "ranked": 56992,
+  "phrases": 1763937,
+  "builtAt": "2026-10-17",
+  "edition": "full",
   "sources": [
     "ECDICT full + curated basic (MIT)",
     "CC-CEDICT (CC BY-SA 4.0)"
   ],
-  "phrases": 1763701,
   "source": "https://github.com/skywind3000/ECDICT",
-  "edition": "full",
+  "normalised": "IPA repaired (schwa/stress/length), specialist senses moved to domains, Collins/Oxford/frequency ranks kept",
   "sourceSHA256": "f370a0ecb58ada758d9dfe739db1667fd4ed87ed3055a4a7cb6c7054ecdf83d6"
 }

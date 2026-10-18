@@ -25,3 +25,6 @@ assets/*-v*.ico
 
 assets/wordnet/wordnet.sqlite
 assets/wordnet/wordnet.building
+assets/wiktionary/*.sqlite
+__pycache__/
+*.pyc
