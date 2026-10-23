@@ -20,16 +20,29 @@ function createProductionService(store,getKey,judge=judgeSentence,now=()=>new Da
     if(current.productionPractice?.active?.fingerprint===fingerprint)return {entry:current,exercise:current.productionPractice.active};
     const exercise={id:crypto.randomUUID(),fingerprint,draft:'',allowedWords},next={...current,productionPractice:{...current.productionPractice,active:exercise}};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?next:item)});return {entry:next,exercise};}
   function draft(id,exerciseId,text){const entry=find(id),active=entry.productionPractice?.active;if(!active||active.id!==exerciseId||active.fingerprint!==stamp(entry))throw Error('这道造句已失效，请重新加载');if(typeof text!=='string'||text.length>500)throw Error('造句限 500 字符');const next={...entry,productionPractice:{...entry.productionPractice,active:{...active,draft:text}}};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?next:item)});return next;}
+  function updatePractice(id,exerciseId,change){
+    const entry=find(id),active=entry.productionPractice?.active;
+    if(!active||active.id!==exerciseId||active.fingerprint!==stamp(entry))throw Error('这道造句已失效，请重新加载');
+    if(pending.has(exerciseId))throw Error('正在批改，请稍后再试');
+    const next={...entry,productionPractice:change(entry.productionPractice,active)};
+    store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?next:item)});return next;
+  }
+  function hint(id,exerciseId){return updatePractice(id,exerciseId,(practice,active)=>({...practice,active:{...active,hints:Math.min(2,(active.hints||0)+1)}}));}
+  function defer(id,exerciseId){return updatePractice(id,exerciseId,practice=>({...practice,deferredUntil:new Date(+now()+20*60_000).toISOString()}));}
   function submit(id,exerciseId,text){const entry=find(id);if(entry.productionPractice?.lastResult?.exerciseId===exerciseId)return {entry,result:entry.productionPractice.lastResult};
     const active=entry.productionPractice?.active;if(!active||active.id!==exerciseId||active.fingerprint!==stamp(entry))throw Error('这道造句已失效，请重新加载');
     const sentence=normalize(text);if(!sentence||sentence.length>500)throw Error('请填写不超过 500 字符的句子');if(!(active.allowedWords||[entry.text]).some(word=>targetPattern(word,entry.language).test(sentence)))throw Error('请在句子中使用显示的目标词');
     if(pending.has(exerciseId))return pending.get(exerciseId);
     const job=(async()=>{const decision=await judge({...entry,allowedWords:active.allowedWords||[entry.text]},sentence,{...store.state.settings},getKey()),current=find(id);if(stamp(current)!==active.fingerprint||current.productionPractice?.active?.id!==exerciseId)throw Error('词条已改变，本次未计分');
       if(![1,2,3].includes(decision.rating))throw Error('AI 批改格式无效；本次未计分，请重试');
-      const time=now(),updated=reviewEntry(current,decision.rating,time,'production'),record={entryId:id,mode:'production',exerciseId,rating:decision.rating,time:time.toISOString(),isNew:isUnreviewed(current)},result={exerciseId,sentence,...decision,due:new Date(updated.reviewSkills.production.card.due).toISOString(),record};
-      updated.productionPractice={...current.productionPractice,active:null,lastResult:result};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?updated:item),stats:{...store.state.stats,reviews:[...store.state.stats.reviews,record]}});return {entry:updated,result};
+      const hints=current.productionPractice.active.hints||0,rating=hints?1:decision.rating;
+      const time=now(),updated=reviewEntry(current,rating,time,'production'),record={entryId:id,mode:'production',exerciseId,rating,hints,time:time.toISOString(),isNew:isUnreviewed(current)};
+      const assisted=hints>0&&decision.rating>1;
+      const retryAfter=assisted?new Date(+time+10*60_000).toISOString():null;
+      const result={exerciseId,sentence,...decision,rating,hints,assisted,due:retryAfter||new Date(updated.reviewSkills.production.card.due).toISOString(),record};
+      updated.productionPractice={...current.productionPractice,active:null,lastResult:result,deferredUntil:null,retryAfter};store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?updated:item),stats:{...store.state.stats,reviews:[...store.state.stats.reviews,record]}});return {entry:updated,result};
     })();pending.set(exerciseId,job);job.finally(()=>pending.delete(exerciseId)).catch(()=>{});return job;
   }
-  return {prepare,draft,submit};
+  return {prepare,draft,submit,hint,defer};
 }
 module.exports={createProductionService,judgeSentence};

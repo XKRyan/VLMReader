@@ -44,3 +44,14 @@ License: electron/vendor/lzo1x.LICENSE.txt. It decompresses LZO blocks inside im
 MDX binary-format reference: writemdict https://github.com/zhansliu/writemdict (used only to cross-check the parser against reference files; no code bundled).
 English Wiktionary: https://en.wiktionary.org, CC BY-SA 4.0, parsed via https://huggingface.co/datasets/cluesurf/wiktionary-english. See wiktionary/ATTRIBUTION.txt.
 User-imported dictionaries, including American Heritage, are not bundled or redistributed.
+
+Word original-layout rendering: docx-preview 0.4.1, Copyright Volodymyr Baydalka.
+Source: https://github.com/VolodymyrBaydalka/docxjs
+License: Apache-2.0; see DOCX-PREVIEW-LICENSE.txt.
+
+Markdown reading: markdown-it and its footnote, sub, sup, mark, ins, deflist, emoji and task-lists plugins (MIT).
+Mathematics: KaTeX (MIT), https://katex.org/ . Fonts and licenses are bundled.
+Syntax highlighting: highlight.js (BSD-3-Clause), https://highlightjs.org/ .
+Diagrams: Mermaid (MIT), https://mermaid.js.org/ ; flowchart.js and Raphael (MIT); Vega, Vega-Lite and vega-interpreter (BSD-3-Clause), https://vega.github.io/ .
+PlantUML source encoding: plantuml-encoder (MIT). PlantUML is rendered by the online plantuml.com service only after the reader requests it; its server software is not bundled.
+Dependency versions, upstream links and licenses: markdown-licenses/ .

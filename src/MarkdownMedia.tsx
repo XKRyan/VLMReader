@@ -1,0 +1,10 @@
+import {useEffect,useRef,useState} from 'react';
+import {t} from './i18n';
+export default function MarkdownMedia({src,alt,onClose}:{src:string;alt:string;onClose:()=>void}){
+  const [zoom,setZoom]=useState(1),[width,setWidth]=useState(800),dialog=useRef<HTMLDivElement>(null),close=useRef(onClose);close.current=onClose;
+  useEffect(()=>{const previous=document.activeElement as HTMLElement;dialog.current?.focus({preventScroll:true});const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();event.stopImmediatePropagation();close.current();}if(['+','=','-','0'].includes(event.key)){event.preventDefault();event.stopImmediatePropagation();setZoom(value=>event.key==='0'?1:Math.max(.25,Math.min(5,value+(event.key==='-'?-.25:.25))));}if(event.key==='Tab'){const items=[...dialog.current!.querySelectorAll<HTMLButtonElement>('button')],at=items.indexOf(document.activeElement as HTMLButtonElement);event.preventDefault();items[(at+(event.shiftKey?-1:1)+items.length)%items.length]?.focus();}};document.addEventListener('keydown',key,true);return()=>{document.removeEventListener('keydown',key,true);previous?.focus({preventScroll:true});};},[]);
+  return <div className="markdown-media-backdrop" role="dialog" aria-modal="true" aria-label={t('查看图片')} tabIndex={-1} ref={dialog} onMouseUp={event=>event.stopPropagation()} onClick={event=>{if(event.target===event.currentTarget)onClose();}}>
+    <div className="markdown-media-toolbar"><button aria-label={t('缩小图片')} onClick={()=>setZoom(value=>Math.max(.25,value-.25))}>−</button><span>{Math.round(zoom*100)}%</span><button aria-label={t('放大图片')} onClick={()=>setZoom(value=>Math.min(5,value+.25))}>+</button><button onClick={()=>setZoom(1)}>{t('适合窗口')}</button><button onClick={onClose}>{t('关闭')}</button></div>
+    <div className="markdown-media-viewport"><img src={src} alt={alt} style={{width:width*zoom}} onLoad={event=>{const image=event.currentTarget;setWidth(Math.min(image.naturalWidth||800,window.innerWidth-80,(window.innerHeight-180)*(image.naturalWidth||800)/Math.max(1,image.naturalHeight)));}}/></div>
+  </div>;
+}

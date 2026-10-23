@@ -14,7 +14,7 @@ export function textIndex(root:Element){
   if(characters.at(-1)===' '){characters.pop();points.pop();}
   return {text:characters.join(''),points};
 }
-export function selectionStart(root:Element,range:Range){const index=textIndex(root);const start=index.points.findIndex(point=>range.comparePoint(point.node,point.start)===0);return {text:index.text,start:Math.max(0,start)};}
+export function selectionStart(root:Element,range:Range,includeSelection=false){const index=textIndex(root);const start=index.points.findIndex(point=>range.comparePoint(point.node,point.start)===0),end=includeSelection?index.points.findLastIndex(point=>range.comparePoint(point.node,point.end)===0):-1;return {text:index.text,start:Math.max(0,start),selectedText:includeSelection?index.text.slice(Math.max(0,start),end+1):undefined};}
 export function annotationRange(root:Element,mark:Pick<Mark,'text'|'start'|'context'>):Range|null{
   const index=textIndex(root),needle=normalizedText(mark.text);if(!needle)return null;
   let at=typeof mark.start==='number'&&index.text.slice(mark.start,mark.start+needle.length)===needle?mark.start:-1;

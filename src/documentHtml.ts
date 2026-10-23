@@ -1,8 +1,9 @@
 import DOMPurify from 'dompurify';
 
-const formatting=['color','background-color','font-weight','font-style','text-decoration-line','text-decoration-color'] as const;
+const formatting=['color','background-color','font-weight','font-style','text-decoration-line','text-decoration-color','text-align'] as const;
 function safeValue(property:string,value:string){
   if(!value||/url\s*\(|var\s*\(|expression\s*\(|[{}<>]/i.test(value))return '';
+  if(property==='text-align')return /^(left|right|center|justify|start|end)$/.test(value)?value:'';
   if(property==='font-weight')return /^(normal|bold|[1-9]00)$/.test(value)?value:'';
   if(property==='font-style')return /^(normal|italic|oblique)$/.test(value)?value:'';
   if(property==='text-decoration-line')return /^(none|(?:underline|overline|line-through)(?: (?:underline|overline|line-through))*)$/.test(value)?value:'';

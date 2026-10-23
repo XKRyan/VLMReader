@@ -1,7 +1,11 @@
 import type {Entry,Settings,State,ReviewMode,Notebook} from '../src/types';
-export interface ReviewTask {entryId:string;mode:ReviewMode;due:number;isNew:boolean;learning:boolean;urgency?:number;blocked?:boolean}
+export interface ReviewTask {entryId:string;mode:ReviewMode;due:number;isNew:boolean;learning:boolean;urgency?:number;blocked?:boolean;stage?:'study';firstProduction?:boolean}
 export const REVIEW_METHODS:ReviewMode[];
 export const METHOD_GAP:number;
+export const NEW_BATCH:number;
+export function initialLearningPending(entry:Entry):boolean;
+export function inReviewScope(entry:Entry,scope?:string,lists?:Set<string>,settings?:Partial<Settings>):boolean;
+export function firstProductionReady(entry:Entry,settings?:Partial<Settings>):boolean;
 export function enabledMethods(settings?:Partial<Settings>):ReviewMode[];
 export function totalReviews(entry:Entry):number;
 export function isUnreviewed(entry:Entry):boolean;
@@ -10,5 +14,8 @@ export function wordlistIds(notebooks?:Notebook[]):Set<string>;
 export function isListOnly(entry:Entry,lists:Set<string>):boolean;
 export function inferNotebookKind(notebook:Notebook,entries:Entry[]):'personal'|'wordlist';
 export function inNotebook(entry:Entry,scope?:string,lists?:Set<string>):boolean;
-export function buildReviewQueue(state:State,kind?:string,scope?:string,now?:number):ReviewTask[];
-export function reconcileReviewQueue(state:State,queue:ReviewTask[],index:number,kind?:string,scope?:string,now?:number,keepCurrentResult?:boolean):ReviewTask[];
+export const EARLY_BATCH:number;
+export const EARLY_HORIZON:number;
+export const WAIT_WINDOW:number;
+export function buildReviewQueue(state:State,kind?:string,scope?:string,now?:number,early?:boolean):ReviewTask[];
+export function reconcileReviewQueue(state:State,queue:ReviewTask[],index:number,kind?:string,scope?:string,now?:number,keepCurrentResult?:boolean,preserveCurrent?:boolean,early?:boolean):ReviewTask[];

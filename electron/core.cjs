@@ -1,11 +1,42 @@
 const crypto = require('node:crypto');
 const { createEmptyCard, fsrs, generatorParameters, Rating } = require('ts-fsrs');
-const scheduler = fsrs(generatorParameters({ request_retention: 0.9, enable_fuzz: false }));
+// FSRS-6 defaults with a one-year ceiling: a vocabulary card should not vanish
+// for decades. Spacing itself is left to the model.
+const defaultWeights = generatorParameters({}).w;
+let schedulerParams = { request_retention: 0.9, enable_fuzz: false, maximum_interval: 365, learning_steps:['1m','10m'], relearning_steps:['1m','10m'] };
+let scheduler = fsrs(generatorParameters(schedulerParams));
+// The forgetting curve can be calibrated to this learner (see fsrs-calibrate).
+// Only w20 changes; every other weight keeps the population defaults.
+function setDecay(decay) {
+  const value = Number(decay);
+  if (!Number.isFinite(value) || value < 0.08 || value > 0.45) return false;
+  const weights = [...defaultWeights]; weights[20] = value;
+  scheduler = fsrs(generatorParameters({ ...schedulerParams, w: weights }));
+  return true;
+}
+// Deterministic spread instead of random fuzz: words learned on the same day
+// would otherwise all come back on exactly the same day. The jitter is seeded by
+// the word and its review count, so a card always lands on the same date.
+function spread(card, seed) {
+  const days = card.scheduled_days;
+  if (!(days >= 3)) return card;
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index++) { hash ^= seed.charCodeAt(index); hash = Math.imul(hash, 16777619); }
+  const offset = ((hash >>> 0) % 2001) / 20000 - 0.05;
+  return { ...card, due: new Date(new Date(card.due).getTime() + offset * days * 86400000) };
+}
 const normalize = s => String(s || '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 function hydrate(card) {
   return { ...card, due: new Date(card.due), ...(card.last_review ? { last_review: new Date(card.last_review) } : {}) };
 }
-const {REVIEW_METHODS,totalReviews,nextReview}=require('../shared/review-policy.mjs');
+const {REVIEW_METHODS,totalReviews,nextReview,isUnreviewed}=require('../shared/review-policy.mjs');
+function studyEntry(entry, now = new Date()) {
+  if (entry.kind !== 'word' || !entry.translation) throw Error('请先补全单词释义');
+  if (!isUnreviewed(entry)) return entry;
+  // Exposure is neither a successful retrieval nor a failed test. Keep every
+  // FSRS card and the review log untouched until an actual recall attempt.
+  return {...withReviewSkills(entry),initialLearning:{introducedAt:now.toISOString(),due:new Date(+now+60_000).toISOString()},updatedAt:now.toISOString()};
+}
 function withReviewSkills(entry, legacyMode='meaning') {
   if(entry.kind!=='word')return entry;
   const existing=entry.reviewSkills||{}, skills={};
@@ -19,17 +50,20 @@ function reviewEntry(entry, rating, now = new Date(), mode='meaning') {
   if(!REVIEW_METHODS.includes(mode)||entry.kind==='sentence'&&!['meaning','cloze'].includes(mode))throw Error('复习方式无效');
   entry=withReviewSkills(entry);
   const before=entry.kind==='word'?entry.reviewSkills[mode].card:entry.card;
+  if (rating === 4 && entry.initialLearning && mode === 'meaning' && [0,1].includes(before.state)) throw Error('新词先完成短期回忆，再使用轻松评分');
   const result = scheduler.next(hydrate(before), now, rating);
-  const reviewSkills=entry.reviewSkills?{...entry.reviewSkills,[mode]:{card:result.card,lastRating:rating}}:undefined;
-  const updated={...entry,...(reviewSkills?{reviewSkills}:{}),card:result.card,updatedAt:now.toISOString(),history:[...(entry.history||[]),{before:entry.card,beforeSkill:entry.reviewSkills?.[mode],mode,log:result.log}].slice(-100)};
-  if(reviewSkills)updated.card={...result.card,reps:totalReviews(updated),lapses:REVIEW_METHODS.reduce((sum,key)=>sum+reviewSkills[key].card.lapses,0)};
+  const card = spread(result.card, entry.id + ':' + mode + ':' + result.card.reps);
+  const reviewSkills=entry.reviewSkills?{...entry.reviewSkills,[mode]:{card,lastRating:rating}}:undefined;
+  const updated={...entry,...(reviewSkills?{reviewSkills}:{}),card,updatedAt:now.toISOString(),history:[...(entry.history||[]),{before:entry.card,beforeSkill:entry.reviewSkills?.[mode],mode,log:result.log}].slice(-100)};
+  if(reviewSkills)updated.card={...card,reps:totalReviews(updated),lapses:REVIEW_METHODS.reduce((sum,key)=>sum+reviewSkills[key].card.lapses,0)};
   return updated;
 }
 function reviewIntervals(entry, now = new Date(), mode='meaning') {
   if(!REVIEW_METHODS.includes(mode))throw Error('复习方式无效');
   entry=withReviewSkills(entry);
   const results = scheduler.repeat(hydrate(entry.reviewSkills?.[mode]?.card||entry.card), now);
-  return [1,2,3,4].map(rating => ({ rating, due: results[rating].card.due.toISOString() }));
+  // The preview must show the same day the card will actually land on, spread included.
+  return [1,2,3,4].map(rating => ({ rating, due: spread(results[rating].card, entry.id + ':' + mode + ':' + results[rating].card.reps).due.toISOString() }));
 }
 function undoReviewEntry(entry){
   const history=[...(entry.history||[])],last=history.pop();if(!last)return entry;
@@ -55,4 +89,4 @@ function vocabularyCsv(entries,settings={}) {
   const rows = entries.map(e => {const due=nextReview(e,settings).due;return [e.text, e.kind, e.translation, e.definition, e.phonetic, e.context, e.bookTitle, e.location, e.note, Number.isFinite(due)?new Date(due).toISOString():''].map(csvEscape).join(',');});
   return '\ufeff' + header.map(csvEscape).join(',') + '\r\n' + rows.join('\r\n');
 }
-module.exports = { normalize, hydrate, makeEntry, reviewEntry, reviewIntervals, undoReviewEntry, withReviewSkills, vocabularyCsv };
+module.exports = { normalize, hydrate, makeEntry, studyEntry, reviewEntry, reviewIntervals, undoReviewEntry, withReviewSkills, vocabularyCsv, setDecay, defaultWeights };

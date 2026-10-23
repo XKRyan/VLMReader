@@ -1,19 +1,24 @@
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 // A small, separate file keeps lookup history out of library.json, which is
-// several megabytes and rewritten on every study change.
-const LIMIT=60;
+// several megabytes and rewritten on every study change. Ten entries is all the
+// recent-lookups list needs and keeps the file tiny.
+const LIMIT=10;
 class DictionaryHistory{
   constructor(dir){
     this.file=path.join(dir,'dictionary-history.json');
-    this.items=this.read();
+    const {items,trimmed}=this.read();
+    this.items=items;
+    // Shrink a file written while the limit was larger.
+    if(trimmed)this.write();
   }
   read(){
     try{
-      if(!fs.existsSync(this.file))return [];
+      if(!fs.existsSync(this.file))return {items:[],trimmed:false};
       const parsed=JSON.parse(fs.readFileSync(this.file,'utf8'));
-      if(!Array.isArray(parsed))return [];
-      return parsed.filter(item=>item&&typeof item.word==='string'&&item.word.trim()&&typeof item.at==='string').slice(0,LIMIT);
-    }catch{return [];}
+      if(!Array.isArray(parsed))return {items:[],trimmed:false};
+      const valid=parsed.filter(item=>item&&typeof item.word==='string'&&item.word.trim()&&typeof item.at==='string');
+      return {items:valid.slice(0,LIMIT),trimmed:valid.length>LIMIT};
+    }catch{return {items:[],trimmed:false};}
   }
   write(){
     const temporary=this.file+'.'+crypto.randomUUID()+'.tmp';

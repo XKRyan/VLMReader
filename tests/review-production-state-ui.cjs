@@ -43,12 +43,18 @@ const nav=(page,name)=>page.locator('.app-sidebar').getByRole('button',{name:new
     // session prefix must not bypass the learner's latest method settings.
     await nav(page,'偏好设置').click();await page.getByRole('switch',{name:'启用回忆词义',exact:true}).click();await page.getByRole('switch',{name:'启用造句练习',exact:true}).click();
     const added=await page.evaluate(()=>window.mem.collect({text:'candid',kind:'word',context:'A candid teacher answers the question honestly.',bookId:'',bookTitle:'',location:'',notebookIds:[]}));
+    // This case tests undo on an encountered recall card. Advance the isolated
+    // test clocks past its first step; fresh-word study has its own UI suite.
+    await page.evaluate(id=>window.mem.review(id,1,'meaning'),added.id);
+    const reviewTime=Date.now()+120000;
+    await app.evaluate((_,time)=>{const NativeDate=Date;global.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[time]));}static now(){return time;}};},reviewTime);
+    await page.clock.install({time:new Date(reviewTime)});
     // The direct seed API does not emit a renderer mutation; refresh its state.
     await page.reload();await nav(page,'生词本').waitFor();await nav(page,'生词本').click();await page.getByRole('button',{name:'去复习',exact:true}).click();await expect(page.locator('.flashcard-front h2')).toHaveText('candid');
     await page.getByRole('button',{name:'显示答案',exact:true}).click();await page.locator('.ratings .easy').click();await expect(page.getByRole('button',{name:'撤销上一次评分',exact:true})).toBeEnabled();
     await nav(page,'偏好设置').click();await page.getByRole('switch',{name:'启用造句练习',exact:true}).click();await page.getByRole('switch',{name:'启用回忆词义',exact:true}).click();await nav(page,'复习').click();
     await page.getByRole('button',{name:'撤销上一次评分',exact:true}).click();
-    await expect.poll(async()=>(await boot()).entries.find(item=>item.id===added.id).reviewSkills.meaning.card.reps).toBe(0);
+    await expect.poll(async()=>(await boot()).entries.find(item=>item.id===added.id).reviewSkills.meaning.card.reps).toBe(1);
     await expect(page.locator('.flashcard-front')).toHaveCount(0);await expect(page.locator('.review-method-notice')).toBeVisible();checks.undoCannotReenableDisabledMethod=true;
     assert.deepEqual(errors,[]);fs.writeFileSync(path.join(root,'publication','review-production-state-validation.json'),JSON.stringify({version:require('../package.json').version,checks,aiRequests:requests.length,errors},null,2));console.log('PRODUCTION STATE UI PASSED '+JSON.stringify(checks));
   }finally{server.close();await app.close();}

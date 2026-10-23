@@ -14,6 +14,8 @@ function dueWord(mode,index=0){
     entry.reviewSkills[trained].card.due=new Date(now+86400000).toISOString();
   }
   if(mode==='meaning')entry=reviewEntry(entry,3,new Date(+yesterday-index*60000),mode);
+  // This lane represents a word whose first writing checkpoint is already done.
+  if(mode==='spelling'){entry=reviewEntry(entry,4,yesterday,'production');entry.reviewSkills.production.card.due=new Date(now+86400000).toISOString();}
   return entry;
 }
 const stateFor=entries=>({entries,settings:{...settings},stats:{reviews:[]}});
@@ -22,7 +24,7 @@ test('an overdue recall backlog cannot hide enabled sentence-writing practice',(
   const fresh=withReviewSkills(makeEntry({text:'candid',translation:'坦率的'},yesterday));entries.push(fresh);
   const state=stateFor(entries),before=JSON.stringify(state),queue=buildReviewQueue(state,'all','',now);
   assert.deepEqual(new Set(queue.slice(0,4).map(task=>task.mode)),new Set(REVIEW_METHODS));
-  assert.equal(queue.at(-1).entryId,fresh.id,'Due practice must remain ahead of fresh vocabulary');
+  assert.ok(!queue.some(task=>task.entryId===fresh.id),'An unfinished learning backlog must hold new vocabulary back');
   assert.equal(new Set(queue.map(task=>task.entryId)).size,queue.length);
   const recall=queue.filter(task=>task.mode==='meaning'&&!task.isNew);
   assert.deepEqual(recall.map(task=>task.due),recall.map(task=>task.due).sort((a,b)=>a-b),'Urgency within each ability must be retained');
@@ -56,6 +58,7 @@ test('changing enabled methods refreshes the pending queue without losing the ac
   const refreshed=reconcileReviewQueue(state,old,0,'all','',now);
   assert.equal(refreshed[0],current,'An unfinished input or feedback must stay mounted');
   assert.ok(refreshed.slice(1).some(task=>task.mode==='production'));
+  assert.ok(refreshed.findIndex(task=>task.mode==='production')<4,'A newly enabled ability joins the next mixed round');
   assert.equal(new Set(refreshed.map(task=>task.entryId)).size,refreshed.length);
 });
 test('reconciliation keeps completed progress and skips a disabled or removed active exercise',()=>{

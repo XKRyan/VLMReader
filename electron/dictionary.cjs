@@ -3,6 +3,32 @@ const path = require('node:path');
 const {lemmaCandidates,forms,normalizeRow}=require('./dictionary-policy.cjs');
 const {CustomDictionaries}=require('./custom-dictionaries.cjs');
 const {openReadOnlyDatabase}=require('./read-only-sqlite.cjs');
+const LETTERS='abcdefghijklmnopqrstuvwxyz';
+// Every one-character edit of a typed word: the usual typo candidates.
+function* edits(word){
+  for(let i=0;i<word.length;i++){
+    const head=word.slice(0,i),tail=word.slice(i+1);
+    yield head+tail;
+    for(const letter of LETTERS)if(letter!==word[i])yield head+letter+tail;
+    if(i+1<word.length&&word[i]!==word[i+1]&&word[i]!=='-'&&word[i+1]!=='-')yield head+word[i+1]+word[i]+word.slice(i+2);
+  }
+  for(let i=0;i<=word.length;i++){const head=word.slice(0,i),tail=word.slice(i);for(const letter of LETTERS)yield head+letter+tail;}
+}
+function editDistance(a,b,limit=2){
+  if(Math.abs(a.length-b.length)>limit)return limit+1;
+  let previous=Array.from({length:b.length+1},(_,index)=>index);
+  for(let i=1;i<=a.length;i++){
+    const current=[i];
+    let best=i;
+    for(let j=1;j<=b.length;j++){
+      current[j]=Math.min(previous[j]+1,current[j-1]+1,previous[j-1]+(a[i-1]===b[j-1]?0:1));
+      if(current[j]<best)best=current[j];
+    }
+    if(best>limit)return limit+1;
+    previous=current;
+  }
+  return previous[b.length];
+}
 class Dictionary {
   static SOURCES=['ecdict','cedict','wiktionary','wordnet'];
   constructor(assets,dataDir) { this.assets=assets;this.sources=new Set(Dictionary.SOURCES);if(dataDir)this.custom=new CustomDictionaries(dataDir); }
@@ -83,6 +109,9 @@ class Dictionary {
     if(!custom.length&&!built){
       // Words no dictionary covers can be filled from earlier AI translations.
       const ai=this.custom?.aiLookup(cleaned);if(ai)return {...ai,source:'AI 补充',cueWords:[...new Set([cleaned,ai.lemma].filter(Boolean))]};
+      // A meaning the learner already had explained in context is reusable too.
+      const remembered=this.contextMeanings?.get(cleaned);
+      if(remembered&&remembered.translation)return {word:cleaned,phonetic:'',translation:remembered.translation,definition:'',source:'AI 语境',tags:'',exchange:'',cueWords:[cleaned]};
     }
     if(!custom.length)return built;
     // The catalog order is the display priority: the first enabled dictionary
@@ -103,7 +132,56 @@ class Dictionary {
     let rows=await this.custom.lookup(cleaned);
     if(!rows.some(usable)){const built=await this.builtInLookup(cleaned),lemma=built?.lemma||built?.word;if(lemma&&lemma.toLowerCase()!==cleaned.toLowerCase())rows=await this.custom.lookup(lemma);}
     const main=rows.find(row=>String(row.translation||'').trim())||rows.find(usable);
-    return main?{translation:String(main.translation||main.definition).trim(),source:main.source}:null;
+    if(main)return {translation:String(main.translation||main.definition).trim(),source:main.source};
+    // No dictionary gloss for this spelling: fall back to a meaning the learner
+    // already had explained, so a recall card is never blank.
+    const remembered=this.contextMeanings?.get(cleaned);
+    return remembered&&remembered.translation?{translation:remembered.translation,source:'AI 语境'}:null;
+  }
+  // Spelling hints look at the whole word list even when a source is switched
+  // off for display: the list is a vocabulary reference, not a dictionary view.
+  async suggest(text){
+    const cleaned=this.clean(text).toLowerCase();
+    if(cleaned.length<3||cleaned.length>40||!/^[a-z][a-z'’-]*$/.test(cleaned))return null;
+    await this.init();
+    if(!this.rawStatement)this.rawStatement=this.db.prepare('SELECT word, phonetic, translation, definition, collins, rank FROM entries WHERE word = ? COLLATE NOCASE');
+    if(!this.prefixStatement)this.prefixStatement=this.db.prepare('SELECT word, phonetic, translation, tags, collins, rank FROM entries WHERE word >= ? AND word < ? AND length(word) <= 40 LIMIT 400');
+    const lookup=word=>{
+      this.rawStatement.bind([word]);
+      const row=this.rawStatement.step()?this.rawStatement.getAsObject():null;
+      this.rawStatement.reset();
+      return row&&row.word?row:null;
+    };
+    const rank=(a,b)=>(b.collins||0)-(a.collins||0)||((a.rank||1e9)-(b.rank||1e9))||a.word.length-b.word.length;
+    // A headword with a phonetic, exam tags, a Collins rating or a frequency
+    // rank is a real dictionary word. Scraped typo rows such as "recieve" have
+    // none of those, which is what makes them safe to replace.
+    const solid=row=>!!row&&(!!row.phonetic||!!row.tags||!!row.collins||!!row.rank);
+    const current=lookup(cleaned);
+    if(solid(current))return null;
+    // One edit away covers most slips: recieve, resiliant.
+    const found=[];
+    for(const candidate of edits(cleaned)){
+      const row=lookup(candidate);
+      if(solid(row)&&!found.some(item=>item.word.toLowerCase()===row.word.toLowerCase()))found.push(row);
+    }
+    if(found.length)found.sort(rank);
+    if(found.length)return {word:found[0].word,phonetic:found[0].phonetic||'',translation:found[0].translation||found[0].definition||''};
+    // Two edits away: scan the neighbouring prefix range and score by distance.
+    const prefix=cleaned.slice(0,Math.max(2,Math.min(4,cleaned.length-1)));
+    this.prefixStatement.bind([prefix,prefix+'\uffff']);
+    const close=[];
+    while(this.prefixStatement.step()){
+      const row=this.prefixStatement.getAsObject();
+      if(!row||!row.word||!solid(row))continue;
+      const distance=editDistance(cleaned,row.word.toLowerCase(),2);
+      if(distance<=2&&distance>0)close.push({word:row.word,distance});
+    }
+    this.prefixStatement.reset();
+    if(!close.length)return null;
+    close.sort((a,b)=>a.distance-b.distance||a.word.length-b.word.length);
+    const best=lookup(close[0].word);
+    return best?{word:best.word,phonetic:best.phonetic||'',translation:best.translation||best.definition||''}:null;
   }
   async synonyms(word){
     await this.init();if(!this.wordnet||!this.enabled('wordnet'))return [];
@@ -111,6 +189,6 @@ class Dictionary {
     const query=this.wordnet.prepare('SELECT DISTINCT related.word,meanings.pos,meanings.definition FROM lexemes own JOIN senses a ON own.lexicalId=a.lexicalId JOIN meanings ON meanings.synset=a.synset JOIN senses b ON b.synset=a.synset JOIN lexemes related ON related.lexicalId=b.lexicalId WHERE own.word=? AND related.word<>? LIMIT 12');
     const result=[];try{query.bind([target,target]);while(query.step()){const row=query.getAsObject(),translation=this.query(row.word)?.translation||'';result.push({word:row.word,pos:row.pos,meaning:translation.split('\n')[0],note:row.definition,source:'Open English WordNet'});}}finally{query.free();}return result;
   }
-  close(){this.statement?.free();this.senses?.free();this.glosses?.free();this.phrases?.free();this.statement=this.senses=this.glosses=this.phrases=null;this.db?.close();this.wordnet?.close();this.reference?.close();this.db=this.wordnet=this.reference=null;this.promise=null;this.custom?.close();}
+  close(){this.statement?.free();this.senses?.free();this.glosses?.free();this.phrases?.free();this.rawStatement?.free();this.prefixStatement?.free();this.statement=this.senses=this.glosses=this.phrases=this.rawStatement=this.prefixStatement=null;this.db?.close();this.wordnet?.close();this.reference?.close();this.db=this.wordnet=this.reference=null;this.promise=null;this.custom?.close();}
 }
 module.exports={ Dictionary };

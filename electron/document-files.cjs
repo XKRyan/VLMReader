@@ -10,19 +10,22 @@ function readText(filename){
 }
 function references(text){
   const result=new Set();
+  const tokens=require('markdown-it')({html:true}).parse(text,{});
+  function walk(items){for(const token of items){if(token.type==='image')result.add(token.attrGet('src'));if(token.children)walk(token.children);}}
+  walk(tokens);
   for(const match of text.matchAll(/<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi))result.add((match[1]||match[2]||match[3]).replace(/&amp;/g,'&'));
   for(const match of text.matchAll(/!\[[^\]]*\]\(\s*(?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\s*\)/g))result.add(match[1]||match[2]);
   for(const match of text.matchAll(/^\s*\[[^\]]+\]:\s*(?:<([^>]+)>|(\S+))/gm))result.add(match[1]||match[2]);
   return result;
 }
 function copyImages(sourceFile,directory){
-  const base=path.resolve(path.dirname(sourceFile)),manifest={};
+  const base=path.resolve(path.dirname(sourceFile)),manifestFile=path.join(directory,'manifest.json'),manifest=fs.existsSync(manifestFile)?JSON.parse(fs.readFileSync(manifestFile,'utf8')):{};
   for(const reference of references(readText(sourceFile))){
     if(/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(reference))continue;
     let relative;try{relative=decodeURIComponent(reference.split(/[?#]/)[0]);}catch{continue;}
     const source=path.resolve(base,relative),extension=path.extname(source).slice(1).toLowerCase();
-    if(!source.toLowerCase().startsWith((base+path.sep).toLowerCase())||!TYPES[extension])continue;
-    const stat=fs.statSync(source,{throwIfNoEntry:false});if(!stat?.isFile())continue;
+    if(!TYPES[extension]||path.isAbsolute(relative))continue;
+    const stat=fs.statSync(source,{throwIfNoEntry:false});if(!stat?.isFile()||stat.size>15*1024*1024)continue;
     const filename=crypto.createHash('sha256').update(reference).digest('hex').slice(0,24)+'.'+extension;
     fs.mkdirSync(directory,{recursive:true});fs.copyFileSync(source,path.join(directory,filename));manifest[reference]=filename;
   }
@@ -38,4 +41,4 @@ function imageResources(directory){
   }
   return result;
 }
-module.exports={readText,copyImages,imageResources};
+module.exports={readText,copyImages,imageResources,references};

@@ -1,10 +1,12 @@
-import {useEffect,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useRef,useState} from 'react';
 import * as pdfjs from 'pdfjs-dist';
 import pdfWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import 'pdfjs-dist/web/pdf_viewer.css';
 import ePub from 'epubjs';
 import {documentHtml} from './documentHtml';
-import {marked} from 'marked';
+import {wordOriginal} from './wordOriginal';
+import MarkdownMedia from './MarkdownMedia';
+import {t} from './i18n';
 import {fontStack} from './fonts';
 import {getPalette} from '../electron/palette.cjs';
 import PdfDocument from './PdfDocument';
@@ -19,10 +21,11 @@ export {sentenceFor} from './selection';
 import type {Book,Settings,Mark,AnnotationPreview,SelectionInfo,ReaderMeta,ReaderControl,SearchHit} from './types';
 pdfjs.GlobalWorkerOptions.workerSrc=pdfWorker;
 function flattenToc(items:any[],depth=0):ReaderMeta['toc'] {return items.flatMap(item=>[{label:item.label?.trim()||item.title||'章节',href:item.href||'',depth},...flattenToc(item.subitems||[],depth+1)]);}
-interface Props {onWordClick:(info:SelectionInfo)=>void;active:boolean;book:Book;settings:Settings;vocabulary:Set<string>;notes:Mark[];preview:AnnotationPreview|null;annotationId:string|null;onAnnotationOrder:(ids:string[])=>void;renderAnnotations:(ids:string[])=>React.ReactNode;onCloseAnnotations:()=>void;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
+interface Props {onDocumentLink:(href:string)=>Promise<void>;onWordClick:(info:SelectionInfo)=>void;active:boolean;book:Book;settings:Settings;vocabulary:Set<string>;notes:Mark[];preview:AnnotationPreview|null;annotationId:string|null;onAnnotationOrder:(ids:string[])=>void;renderAnnotations:(ids:string[])=>React.ReactNode;onCloseAnnotations:()=>void;speechText:string;zoom:number;control:React.MutableRefObject<ReaderControl|null>;onNavigate:()=>void;onDismissSelection:()=>void;onMeta:(m:ReaderMeta)=>void;onProgress:(location:string|number,progress:number)=>void;onSelection:(s:SelectionInfo)=>void;onAnnotation:(mark:Mark)=>void;onError:(e:string)=>void;onTitle:(s:string)=>void}
 export default function Reader(props:Props) {
   const {book,settings,control,onMeta,onProgress,onSelection,onError,onTitle}=props;
   const mount=useRef<HTMLDivElement>(null), current=useRef(props);current.current=props;
+  const [media,setMedia]=useState<{src:string;alt:string}|null>(null);
   const [busy,setBusy]=useState(true),[html,setHtml]=useState(''),[pdfDoc,setPdfDoc]=useState<pdfjs.PDFDocumentProxy|null>(null),spokenBlock=useRef(-1),clickedWord=useRef<{doc:Document;text:string;time:number}|null>(null);
   const pdf=useRef<any>(null),epub=useRef<any>(null),rendition=useRef<any>(null),lastHover=useRef('');
   // Repaint vocabulary underlines when pages render, EPUB chapters load, or the word list or theme changes.
@@ -38,6 +41,17 @@ export default function Reader(props:Props) {
   const busyRef=useRef(busy);busyRef.current=busy;
   const wheelState=useRef({delta:0,last:0,turn:0}),ranges=useRef(new Map<string,Range>()),epubRanges=useRef(new Map<Document,Map<string,Range>>());
   const previewRange=useRef<Range|null>(null),[annotationRevision,setAnnotationRevision]=useState(0);
+  const original=book.format==='docx'&&!!book.wordOriginal;
+  const markdownAnchor=useRef<string|null>(null);
+  const loadedBook=useRef(''),switchAnchor=useRef<{text:string;start:number;offset:number}|null>(null);
+  function capturePosition(){
+    const root=mount.current,surface=container.current;if(!root||!surface)return null;
+    const top=surface.getBoundingClientRect().top;
+    const block=[...root.querySelectorAll('p,li,h1,h2,h3,td')].find(el=>el.textContent?.trim()&&el.getBoundingClientRect().bottom>top+12);
+    if(!block)return null;const range=document.createRange();range.selectNodeContents(block);
+    const anchor=selectionStart(root,range);
+    return {text:range.toString().replace(/\s+/g,' ').trim().slice(0,120),start:anchor.start,offset:range.getBoundingClientRect().top-top};
+  }
   function wheelPage(event:WheelEvent){
     if(!current.current.active||book.format!=='epub'||event.ctrlKey||Math.abs(event.deltaX)>Math.abs(event.deltaY)||!event.deltaY)return;
     event.preventDefault();const now=performance.now(),state=wheelState.current,direction=Math.sign(event.deltaY);if(busyRef.current||now-state.turn<500)return;
@@ -63,10 +77,11 @@ export default function Reader(props:Props) {
     const preview=current.current.preview,draftRange=preview&&mount.current?annotationRange(mount.current,preview):null;previewRange.current=draftRange;paintHighlights(next,current.current.notes,document,preview&&draftRange?{...preview,range:draftRange}:null);setAnnotationRevision(value=>value+1);
   }
   function locate(mark:Mark){textGo(mark.location);const range=ranges.current.get(mark.id),surface=container.current;if(range&&surface)surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-110;}
-  function textGo(where:string|number){const el=container.current;if(!el)return;if(typeof where==='number'||/^\d+(\.\d+)?$/.test(where)){el.scrollTop=Number(where);return;}const found=mount.current?.querySelector('#'+CSS.escape(where.replace(/^#/,'')));found?.scrollIntoView({behavior:'smooth',block:'start'});}
+  function textGo(where:string|number){if(book.format==='md'&&typeof where==='string'){const id=where.replace(/^#/,''),target=mount.current?.querySelector('#'+CSS.escape(id));if(target){markdownAnchor.current=id;target.scrollIntoView({behavior:'smooth',block:'start'});return;}}if(book.format==='md')markdownAnchor.current=typeof where==='string'&&!/^\d/.test(where)?where.replace(/^#/,''):null;const el=container.current;if(!el)return;if(typeof where==='number'||/^\d+(\.\d+)?$/.test(where)){el.scrollTop=Number(where);return;}const found=mount.current?.querySelector('#'+CSS.escape(where.replace(/^#/,'')));found?.scrollIntoView({behavior:'smooth',block:'start'});}
   useEffect(()=>{
-    let alive=true;setBusy(true);setHtml('');setPdfDoc(null);initialLocation.current=book.location;
-    window.mem.readBook(book.id).then(async data=>{
+    let alive=true;markdownAnchor.current=null;if(loadedBook.current!==book.id)switchAnchor.current=null;loadedBook.current=book.id;
+    setBusy(true);setHtml('');setPdfDoc(null);initialLocation.current=book.location;
+    window.mem.readBook(book.id,original).then(async data=>{
       if(!alive)return;
       if(book.format==='pdf'){
         const doc=await pdfjs.getDocument({data:data.bytes!,cMapUrl:new URL('pdf-assets/cmaps/',document.baseURI).href,cMapPacked:true,standardFontDataUrl:new URL('pdf-assets/standard_fonts/',document.baseURI).href,wasmUrl:new URL('pdf-assets/wasm/',document.baseURI).href,useWorkerFetch:false}).promise;
@@ -96,24 +111,45 @@ export default function Reader(props:Props) {
       }else{
         let value=data.html||data.text||'';
         if(book.format==='txt')value=value.split(/\n\s*\n/).map(t=>'<p>'+t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')+'</p>').join('');
-        if(book.format==='md')value=await marked(value);
-        const clean=documentHtml(value,data.resources);
+        const clean=book.format==='md'?await (await import('./markdown')).markdownHtml(value,data.resources):original?await wordOriginal(data.bytes!):documentHtml(value,data.resources);
+        if(!alive)return;
         setHtml(clean);
-        control.current={prev:()=>container.current?.scrollBy({top:-500,behavior:'smooth'}),next:()=>container.current?.scrollBy({top:500,behavior:'smooth'}),go:textGo,getText:()=>mount.current?.innerText||'',nextText:async()=>null,highlight:markText,clearSelection,locate,
+        control.current={prepareViewChange:()=>{switchAnchor.current=capturePosition();},prev:()=>container.current?.scrollBy({top:-500,behavior:'smooth'}),next:()=>container.current?.scrollBy({top:500,behavior:'smooth'}),go:textGo,getText:()=>mount.current?.innerText||'',nextText:async()=>null,highlight:markText,clearSelection,locate,
           search:async q=>{const text=mount.current?.innerText||'';const hits:SearchHit[]=[];let at=0;while(q && (at=text.toLocaleLowerCase().indexOf(q.toLocaleLowerCase(),at))>=0&&hits.length<80){const proportion=at/Math.max(1,text.length);hits.push({label:'匹配 '+(hits.length+1),location:proportion*Math.max(0,(container.current?.scrollHeight||0)-(container.current?.clientHeight||0)),excerpt:text.slice(Math.max(0,at-60),at+140)});at+=q.length;}return hits;}};
       }
       if(alive)setBusy(false);
     }).catch(error=>{if(alive){setBusy(false);onError('文档无法打开：'+error.message);}});
     return()=>{alive=false;clearHighlights();for(const doc of epubRanges.current.keys())clearHighlights(doc);epubRanges.current.clear();if(hoverTimer.current)clearTimeout(hoverTimer.current);control.current=null;pdf.current?.destroy();pdf.current=null;rendition.current?.destroy();rendition.current=null;epub.current?.destroy();epub.current=null;};
-  },[book.id]);
-  useEffect(()=>{
+  },[book.id,original]);
+  useLayoutEffect(()=>{
     if(!html||!mount.current)return;
-    const headings=[...mount.current.querySelectorAll('h1,h2,h3')];
+    const headings=[...mount.current.querySelectorAll('h1,h2,h3,h4,h5,h6')];
     const toc=headings.map((el,i)=>{el.id=el.id||'section-'+i;return {label:el.textContent||'章节',href:el.id,depth:Number(el.tagName.slice(1))-1};});
     onMeta({index:1,count:1,toc});
-    if(container.current)container.current.scrollTop=Number(initialLocation.current)||0;
+    const surface=container.current,root=mount.current;
+    let disposed=false;
+    const restore=()=>{
+      if(disposed||!surface)return;
+      if(original)root.style.zoom=String(Math.min(1,Math.max(180,surface.clientWidth-32)/(root.offsetWidth||1))*props.zoom);
+      const anchor=switchAnchor.current,range=anchor?annotationRange(root,anchor):null;
+      if(range)surface.scrollTop+=range.getBoundingClientRect().top-surface.getBoundingClientRect().top-anchor!.offset;
+      else if(typeof initialLocation.current==='string'&&(book.format==='md'||!/^\d/.test(initialLocation.current)))textGo(initialLocation.current);
+      else surface.scrollTop=Number(initialLocation.current)||0;
+      markText();
+    };
+    restore();const settledTop=surface?.scrollTop;
+    // Do not override a user's scroll while fonts or images are loading.
+    void Promise.all([document.fonts.ready,...Array.from(root.querySelectorAll('img')).map(img=>img.decode().catch(()=>{}))]).then(()=>requestAnimationFrame(()=>{if(surface?.scrollTop===settledTop)restore();}));
     markText();
+    return()=>{disposed=true;};
   },[html]);
+  useEffect(()=>{
+    if(!original||!html||!container.current||!mount.current)return;
+    const surface=container.current,root=mount.current;
+    const resize=()=>{const width=root.offsetWidth||1;root.style.zoom=String(Math.min(1,Math.max(180,surface.clientWidth-32)/width)*props.zoom);setAnnotationRevision(value=>value+1);};
+    const observer=new ResizeObserver(resize);observer.observe(surface);resize();
+    return()=>{observer.disconnect();root.style.zoom='';};
+  },[original,html,props.zoom]);
   useEffect(()=>{markText();},[props.notes,props.preview?.text,props.preview?.location,props.preview?.start,props.preview?.cfi,props.preview?.color,props.preview?.id]);
   useEffect(()=>{
     const r=rendition.current;if(!r)return;const colors=getPalette(settings);
@@ -129,9 +165,21 @@ export default function Reader(props:Props) {
     blocks[at].classList.add('speaking');if(at!==spokenBlock.current)blocks[at].scrollIntoView({behavior:'smooth',block:'center'});spokenBlock.current=at;
   },[props.speechText]);
   useEffect(()=>{if(!props.active)return;const r=rendition.current;if(r&&book.location)void r.display(book.location).catch((error:Error)=>current.current.onError(error.message));},[props.active]);
+  useEffect(()=>{
+    if(book.format!=='md'||!html||!mount.current)return;let disposed=false,cleanup:(()=>void)|undefined;const root=mount.current;
+    void import('./markdownEnhance').then(module=>{if(!disposed)cleanup=module.enhanceMarkdown(root,book.id,()=>{if(hoverTimer.current)clearTimeout(hoverTimer.current);const id=markdownAnchor.current,target=id?root.querySelector('#'+CSS.escape(id)):null,surface=container.current;if(target&&surface)surface.scrollTop+=target.getBoundingClientRect().top-surface.getBoundingClientRect().top-24;setAnnotationRevision(value=>value+1);});}).catch(error=>onError(error.message));
+    return()=>{disposed=true;cleanup?.();};
+  },[html,book.id]);
+  function markdownClick(event:React.MouseEvent){
+    if(book.format!=='md'||!(event.target instanceof Element))return;
+    if(hoverTimer.current)clearTimeout(hoverTimer.current);const link=event.target.closest('a[href]');
+    if(link){event.preventDefault();event.stopPropagation();if(event.detail>0&&window.getSelection()?.toString().trim())return;const href=link.getAttribute('href')||'';if(href.startsWith('#')){let id;try{id=decodeURIComponent(href.slice(1));}catch{id=href.slice(1);}if(!id){container.current?.scrollTo({top:0,behavior:'smooth'});return;}const target=mount.current?.querySelector('#'+CSS.escape(id));if(target){markdownAnchor.current=id;current.current.onDismissSelection();target.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});target.setAttribute('tabindex','-1');(target as HTMLElement).focus({preventScroll:true});}else onError(t('找不到链接目标：')+id);}else void current.current.onDocumentLink(href);return;}
+    const img=event.target.closest('img');if(img?.src&&img.naturalWidth){event.preventDefault();event.stopPropagation();setMedia({src:img.src,alt:img.alt});}
+  }
   function onMouseUp(event:React.MouseEvent){
+    if(book.format==='md'&&event.target instanceof Element&&(event.target.closest('button,summary,img,[data-ui]')||event.target.closest('a')&&window.getSelection()?.isCollapsed))return;
     if(book.format==='epub'||book.format==='pdf')return;const sel=window.getSelection();if(!sel?.anchorNode||!mount.current?.contains(sel.anchorNode))return;
-    if(sel.isCollapsed){const id=rangeAtPoint(ranges.current,event.clientX,event.clientY),mark=current.current.notes.find(n=>n.id===id);if(mark){current.current.onAnnotation(mark);return;}
+    if(sel.isCollapsed){if(book.format==='md'&&event.target instanceof Element&&event.target.closest('.katex'))return;const id=rangeAtPoint(ranges.current,event.clientX,event.clientY),mark=current.current.notes.find(n=>n.id===id);if(mark){current.current.onAnnotation(mark);return;}
       // A plain click on a word looks it up; a click on blank space closes the selection.
       const hit=!interactiveTarget(event.target)&&mount.current?wordAt(document,event.clientX,event.clientY,mount.current,pointLocation):null;
       if(hit){sel.removeAllRanges();sel.addRange(hit.range);current.current.onWordClick(hit.info);}else current.current.onDismissSelection();return;}
@@ -150,10 +198,10 @@ export default function Reader(props:Props) {
       current.current.onSelection(info);
     },700);
   }
-  function onMouseMove(e:React.MouseEvent){if(book.format!=='epub'&&container.current)hoverWord(document,e.clientX,e.clientY,container.current);}
-  function onScroll(){if(book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
-  return <div className="reader-document-area"><div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
+  function onMouseMove(e:React.MouseEvent){if(interactiveTarget(e.target)||book.format==='md'&&e.target instanceof Element&&e.target.closest('img,summary,[data-ui],.katex')){if(hoverTimer.current)clearTimeout(hoverTimer.current);return;}if(book.format!=='epub'&&container.current)hoverWord(document,e.clientX,e.clientY,container.current);}
+  function onScroll(){if(hoverTimer.current)clearTimeout(hoverTimer.current);if(busyRef.current||book.format==='epub'||book.format==='pdf')return;const el=container.current;if(el)onProgress(el.scrollTop,el.scrollTop/Math.max(1,el.scrollHeight-el.clientHeight));}
+  return <div className="reader-document-area"><div className={'reader-surface '+(book.format==='epub'?'epub-surface':'')} ref={container} onPointerDown={()=>{markdownAnchor.current=null;}} onWheel={()=>{markdownAnchor.current=null;}} onKeyDown={event=>{if(['ArrowUp','ArrowDown','PageUp','PageDown','Home','End',' '].includes(event.key))markdownAnchor.current=null;}} onClick={markdownClick} onScroll={onScroll} onMouseUp={onMouseUp} onMouseMove={onMouseMove}>
     {busy&&!(book.format==='pdf'&&pdfDoc)&&<div className="reader-loading"><span className="spinner"/>正在打开文档…</div>}
-    {book.format==='pdf'?pdfDoc&&<PdfDocument onWordClick={info=>current.current.onWordClick(info)} doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} onRanges={(next,draftRange)=>{ranges.current=next;previewRange.current=draftRange;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));setAnnotationRevision(value=>value+1);}} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} className={book.format==='epub'?'epub-document':'prose'} style={book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
-  </div><ReaderAnnotations surface={container} notes={props.notes} preview={props.preview} activeId={props.annotationId} revision={annotationRevision} getRanges={()=>({ranges:book.format==='epub'?new Map([...epubRanges.current.values()].flatMap(ranges=>[...ranges])):ranges.current,preview:previewRange.current})} onOpen={props.onAnnotation} onClose={props.onCloseAnnotations} render={props.renderAnnotations}/></div>;
+    {book.format==='pdf'?pdfDoc&&<PdfDocument onWordClick={info=>current.current.onWordClick(info)} doc={pdfDoc} book={book} settings={settings} zoom={props.zoom} notes={props.notes} preview={props.preview} onRanges={(next,draftRange)=>{ranges.current=next;previewRange.current=draftRange;current.current.onAnnotationOrder([...next].sort((a,b)=>a[1].compareBoundaryPoints(Range.START_TO_START,b[1])).map(([id])=>id));setAnnotationRevision(value=>value+1);}} speechText={props.speechText} surface={container} control={control} onMeta={onMeta} onProgress={onProgress} onSelection={onSelection} onAnnotation={props.onAnnotation} onNavigate={props.onNavigate} onDismissSelection={props.onDismissSelection} onError={onError}/>:<div ref={mount} data-annotation-root={book.format==='docx'||book.format==='md'?true:undefined} className={book.format==='epub'?'epub-document':original?'word-original':'prose'} style={original||book.format==='epub'||book.format==='pdf'&&!settings.pdfTextMode?undefined:{fontSize:settings.fontSize,lineHeight:settings.lineHeight,maxWidth:settings.contentWidth,fontFamily:fontStack(settings.readingFont,settings.fontFamily==='serif')}} dangerouslySetInnerHTML={html?{__html:html}:undefined}/>}
+  </div><ReaderAnnotations surface={container} notes={props.notes} preview={props.preview} activeId={props.annotationId} revision={annotationRevision} getRanges={()=>({ranges:book.format==='epub'?new Map([...epubRanges.current.values()].flatMap(ranges=>[...ranges])):ranges.current,preview:previewRange.current})} onOpen={props.onAnnotation} onClose={props.onCloseAnnotations} render={props.renderAnnotations}/>{media&&<MarkdownMedia {...media} onClose={()=>setMedia(null)}/>}</div>;
 }

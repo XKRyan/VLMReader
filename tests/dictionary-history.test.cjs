@@ -24,6 +24,14 @@ test('history is bounded and ignores empty or malformed input',async t=>{
   history.add({word:'   '});history.add({});history.add({word:null});
   assert.equal(history.list().length,before);
 });
+test('an older over-long history file is trimmed to the new limit on load',async t=>{
+  const dir=fixture(t);
+  const many=Array.from({length:LIMIT+30},(_,index)=>({word:'w'+index,at:new Date().toISOString()}));
+  fs.writeFileSync(path.join(dir,'dictionary-history.json'),JSON.stringify(many));
+  const history=new DictionaryHistory(dir);
+  assert.equal(history.list().length,LIMIT);
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir,'dictionary-history.json'),'utf8')).length,LIMIT);
+});
 test('a damaged history file never blocks a lookup and is replaced on the next write',async t=>{
   const dir=fixture(t);
   fs.writeFileSync(path.join(dir,'dictionary-history.json'),'not json');

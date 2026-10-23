@@ -127,8 +127,15 @@ html:root{color-scheme:light}html:root[data-theme=night]{color-scheme:dark}:root
 .dictionary-collocation{border:1px solid var(--line);border-radius:999px;padding:5px 12px;background:var(--paper);max-width:100%}
 .dictionary-collocation strong{font-size:calc(11px * var(--ui-scale, 1.230769));font-weight:500}
 .dictionary-collocation p{margin:2px 0 0;font-size:calc(10px * var(--ui-scale, 1.230769));color:var(--muted)}
-.lookup-history{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;font-size:calc(11px * var(--ui-scale, 1.230769));color:var(--muted)}
+.lookup-history{margin-top:14px;font-size:calc(11px * var(--ui-scale, 1.230769));color:var(--muted)}
+.lookup-history-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
 .lookup-history-label{display:inline-flex;align-items:center;gap:5px;letter-spacing:.4px}
+.lookup-history-list{margin-top:6px;display:flex;flex-direction:column;max-height:260px;overflow-y:auto;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+.lookup-history-row{display:flex;align-items:baseline;gap:10px;width:100%;text-align:left;border:0;border-bottom:1px solid var(--line);background:none;color:var(--text);font:inherit;padding:8px 12px;cursor:pointer}
+.lookup-history-row:last-child{border-bottom:0}
+.lookup-history-row:hover,.lookup-history-row:focus-visible{background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent)}
+.lookup-history-word{flex:none;font-size:calc(12px * var(--ui-scale, 1.230769));font-weight:500}
+.lookup-history-meaning{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted);font-size:calc(10.5px * var(--ui-scale, 1.230769))}
 .lookup-chip{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid var(--line);background:var(--paper);color:var(--text);border-radius:999px;padding:4px 11px;font:inherit;cursor:pointer}
 .lookup-chip:hover,.lookup-chip:focus-visible{border-color:var(--accent);color:var(--accent)}
 .lookup-history-clear{border:0;background:none;color:var(--muted);font:inherit;cursor:pointer;text-decoration:underline}
@@ -154,3 +161,33 @@ html:root{color-scheme:light}html:root[data-theme=night]{color-scheme:dark}:root
 .order-buttons{display:inline-flex;align-items:center;flex:none;gap:2px}
 .order-buttons .icon-button{width:26px;height:26px}
 .order-buttons .icon-button:disabled{opacity:.3}
+.new-word-study .study-definition{white-space:pre-line;color:var(--text);line-height:1.65;margin:0 0 1rem}
+.new-word-study .reveal-area{display:flex;flex-direction:column;align-items:center;gap:.6rem}
+.new-word-study .reveal-area small{color:var(--muted);text-align:center}
+
+/* Writing practice shows no gloss until asked: English first, then Chinese. */
+.production-hints{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px}
+.production-hint{width:100%;max-width:640px;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:var(--paper);text-align:left}
+.production-hint .section-label{font-size:calc(10px * var(--ui-scale, 1.230769));color:var(--muted);letter-spacing:.4px}
+.production-hint p{margin:6px 0 0;font-size:calc(12px * var(--ui-scale, 1.230769));line-height:1.75;white-space:pre-wrap}
+
+.dictionary-correction{margin:12px 0 0;font-size:calc(11px * var(--ui-scale, 1.230769));color:var(--muted)}
+.dictionary-correction strong{color:var(--text);font-weight:500}
+
+.review-complete-actions{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.review-complete small.muted{display:block;margin-top:10px}
+
+.review-elsewhere{margin:12px 0 0;font-size:calc(11px * var(--ui-scale, 1.230769));color:var(--muted);display:flex;align-items:center;gap:6px;justify-content:center;flex-wrap:wrap}
+.review-elsewhere strong{color:var(--text)}
+
+/* AI results carry both the Chinese meaning and an English explanation. */
+.ai-english{margin:8px 0 0;font-size:calc(11.5px * var(--ui-scale, 1.230769));line-height:1.7;color:var(--muted)}
+.ai-english span{display:inline-block;margin-right:8px;padding:1px 5px;border-radius:4px;background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);font-size:calc(9px * var(--ui-scale, 1.230769));letter-spacing:.5px}
+
+.word-production .reveal-area{display:flex;justify-content:center;align-items:center;gap:16px;flex-wrap:wrap}
+
+/* Word page formatting is isolated from adjustable reading typography. */
+.word-original{width:max-content;max-width:none;margin:0 auto;font:12pt "Times New Roman",serif;line-height:normal;color:#000;--paper:#fff;letter-spacing:normal;word-spacing:normal}
+.reader-surface .word-original .vlm-word-wrapper{padding:16px;background:transparent}
+.reader-surface .word-original section.vlm-word{box-shadow:0 2px 12px #0002;overflow:hidden}
+.word-mode{flex-shrink:0}

@@ -12,6 +12,7 @@ function word(text,translation,context,mode){
     entry.reviewSkills[trained].card.due=new Date(now+86400000).toISOString();
   }
   if(mode==='meaning')entry=reviewEntry(entry,3,yesterday,mode);
+  if(mode==='spelling'){entry=reviewEntry(entry,4,yesterday,'production');entry.reviewSkills.production.card.due=new Date(now+86400000).toISOString();}
   return entry;
 }
 const production=word('write','书写','I write a short note every morning.','production');

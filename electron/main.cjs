@@ -11,7 +11,9 @@ const {DictionaryHistory}=require('./dictionary-history.cjs');
 const {createRichDictionary}=require('./dictionary-rich.cjs');
 const {saveAnnotation,updateAnnotation,deleteAnnotation,validateColor}=require('./annotations.cjs');
 const {createWordbookService}=require('./wordbooks.cjs');
-const {makeEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv}=require('./core.cjs');
+const {makeEntry,studyEntry,normalize,reviewEntry,reviewIntervals,undoReviewEntry,withReviewSkills,vocabularyCsv,setDecay}=require('./core.cjs');
+const {calibrate}=require('./fsrs-calibrate.cjs');
+const {ContextMeanings}=require('./context-meanings.cjs');
 const {REVIEW_METHODS,isUnreviewed,inNotebook,wordlistIds}=require('../shared/review-policy.mjs');
 const {translate,validateBase}=require('./translation.cjs');
 const {convertDocx}=require('./docx.cjs');
@@ -22,8 +24,12 @@ const {createWordDetails}=require('./word-details.cjs');
 const {createProductionService}=require('./production.cjs');
 const {LibraryExamples}=require('./library-examples.cjs');
 const {readText,copyImages,imageResources}=require('./document-files.cjs');
+const {cacheImage,localLink,diagramData,saveDiagram}=require('./markdown-resources.cjs');
 const {exportBundle,importBundle}=require('./book-bundle.cjs');
 const isTest=process.env.MEMREADER_TEST==='1';
+// Windows shows the process name in places where the app identity is missing;
+// without this Electron falls back to "Electron".
+app.setName('VLMReader');
 if(process.platform==='win32')app.setAppUserModelId('study.memreader.desktop');
 const assets=app.isPackaged?path.join(process.resourcesPath,'assets'):path.join(__dirname,'..','assets');
 const baseDir=app.isPackaged?path.resolve(path.dirname(process.execPath),'..','..'):path.join(__dirname,'..');
@@ -31,7 +37,11 @@ const dataDir=isTest?process.env.MEMREADER_TEST_DATA:path.join(baseDir,'data');
 app.setPath('userData',path.join(dataDir,'runtime'));
 if(!isTest&&!app.requestSingleInstanceLock())app.exit(0);
 const store=new Store(dataDir);
+const contextMeanings=new ContextMeanings(dataDir);
+// A previously calibrated forgetting curve is part of the learner's schedule.
+if(Number.isFinite(store.state.settings.fsrsDecay))setDecay(store.state.settings.fsrsDecay);
 const dictionary=new Dictionary(assets,dataDir);
+dictionary.contextMeanings=contextMeanings;
 dictionary.setSources(store.state.settings.dictionarySources);
 const dictionaryHistory=new DictionaryHistory(dataDir);
 const {repairDictionaryEntries}=require('./dictionary-policy.cjs');
@@ -50,7 +60,7 @@ function updateMenu(){
   Menu.setApplicationMenu(null);
 }
 function updateChrome(){const p=getPalette(store.state.settings);main?.setTitleBarOverlay({color:p.sidebar,symbolColor:p.text,height:44});}
-const formats=new Set(['pdf','epub','docx','txt','md','html','htm','vlmbook']);
+const formats=new Set(['pdf','epub','docx','txt','md','markdown','html','htm','vlmbook']);
 function getKey(){
   const p=path.join(dataDir,'api-key.bin');if(!fs.existsSync(p))return '';
   try{return safeStorage.decryptString(fs.readFileSync(p));}catch{return '';}
@@ -64,14 +74,14 @@ async function importBooks(paths){
   const added=[];
   for(const filename of paths){
     if(typeof filename!=='string'||!path.isAbsolute(filename))continue;
-    const ext=path.extname(filename).slice(1).toLowerCase();if(!formats.has(ext))continue;
+    let ext=path.extname(filename).slice(1).toLowerCase();if(!formats.has(ext))continue;if(ext==='markdown')ext='md';
     if(ext==='vlmbook'){added.push(await importBundle(store,filename));continue;}
     const info=fs.statSync(filename);if(!info.isFile()||info.size>300*1024*1024)throw Error('文档过大（上限 300 MB）：'+path.basename(filename));
     const hash=crypto.createHash('sha256').update(fs.readFileSync(filename)).digest('hex');
-    const existing=store.state.books.find(b=>b.hash===hash);if(existing){if(['md','html','htm'].includes(ext))copyImages(filename,path.join(dataDir,'books',existing.id+'-assets'));added.push(existing);continue;}
+    const existing=store.state.books.find(b=>b.hash===hash);if(existing){if(['md','html','htm'].includes(ext)){copyImages(filename,path.join(dataDir,'books',existing.id+'-assets'));existing.sourcePath=filename;}added.push(existing);continue;}
     const id=crypto.randomUUID();const dest=path.join(dataDir,'books',id+'.'+ext);fs.copyFileSync(filename,dest);
     if(['md','html','htm'].includes(ext))copyImages(filename,path.join(dataDir,'books',id+'-assets'));
-    const book={id,hash,format:ext,title:path.basename(filename,path.extname(filename)),size:info.size,createdAt:new Date().toISOString(),lastRead:null,progress:0,location:null,favorite:false};
+    const book={id,hash,format:ext,title:path.basename(filename,path.extname(filename)),size:info.size,createdAt:new Date().toISOString(),lastRead:null,progress:0,location:null,favorite:false,...(['md','html','htm'].includes(ext)?{sourcePath:filename}:{})};
     store.state.books.unshift(book);added.push(book);
   }
   store.save();libraryExamples.queue();return added;
@@ -94,24 +104,41 @@ app.whenReady().then(async()=>{
     const known=await dictionary.lookup(found.word).catch(()=>null);if(known&&known.source!=='AI 补充')return;
     try{dictionary.custom.saveAi(found);}catch{/* A rejected AI entry must not fail the translation itself. */}
   }
+  // Every AI meaning of a word is remembered per word, so the same word shows
+  // instantly next time and dictionaries that lack it can fall back to it.
+  function rememberContextMeaning(text,context,result){
+    const word=normalize(text);
+    if(!/^\p{L}[\p{L}\p{M}'’-]{0,39}$/u.test(word)||!result?.translation)return;
+    try{contextMeanings.save(word,{translation:result.translation,english:result.english,explanation:result.explanation,context});}catch{/* memory is optional */}
+  }
   handle('boot',async()=>{await ensureDictionaryRepair();return safeState();});
   handle('books:import',importBooks);
+  handle('books:remote-image',(id,url,plantuml=false)=>cacheImage(dataDir,bookById(id),url,{allowLocal:isTest,plantuml:plantuml===true}));
+  handle('books:diagram-data',(id,source,url)=>diagramData(dataDir,bookById(id),source,url,isTest));
+  handle('books:cache-diagram',(id,source,svg)=>saveDiagram(dataDir,bookById(id),source,svg));
+  handle('books:open-link',async(id,href)=>{
+    const book=bookById(id);if(typeof href!=='string'||href.length>8192)throw Error('Invalid link');
+    if(/^https?:\/\/|^mailto:/i.test(href)){const url=new URL(href);if(url.username||url.password)throw Error('Invalid link');await shell.openExternal(url.href);return null;}
+    const link=localLink(book,href);if(!formats.has(path.extname(link.path).slice(1).toLowerCase()))throw Error('This linked file type cannot be opened in VLMReader');
+    const added=await importBooks([link.path]);return {book:added[0],anchor:link.anchor};
+  });
   handle('books:export-annotated',async id=>{
     const book=bookById(id),name=book.title.replace(/[<>:"/\\|?*\x00-\x1f]/g,'_').slice(0,150)||'Document';
     const result=await dialog.showSaveDialog(main,{title:ui('导出带批注文档','Export annotated document'),defaultPath:name+'.vlmbook',filters:[{name:ui('VLMReader 带批注文档','VLMReader annotated document'),extensions:['vlmbook']}]});
     if(result.canceled||!result.filePath)return null;const destination=path.extname(result.filePath).toLowerCase()==='.vlmbook'?result.filePath:result.filePath+'.vlmbook';return exportBundle(store,id,destination);
   });
-  handle('books:read',async id=>{
+  handle('books:read',async (id,original=false)=>{
     const b=bookById(id);b.lastRead=new Date().toISOString();store.save();
     const p=path.join(dataDir,'books',b.id+'.'+b.format);
-    if(b.format==='docx')return convertDocx(p);
+    if(b.format==='docx'&&!original)return convertDocx(p);
     if(['txt','md','html','htm'].includes(b.format))return {text:readText(p),resources:imageResources(path.join(dataDir,'books',b.id+'-assets'))};
     return {bytes:new Uint8Array(fs.readFileSync(p))};
   });
   handle('books:update',(id,patch)=>{
     const b=bookById(id);
     if('collectionNotebookId' in patch&&patch.collectionNotebookId!=='unfiled'&&!store.state.notebooks.some(item=>item.id===patch.collectionNotebookId))throw Error('词本不存在');
-    const next={...b};for(const key of ['title','location','progress','favorite','cover','pageCount','collectionNotebookId'])if(key in patch)next[key]=patch[key];
+    if('wordOriginal' in patch&&typeof patch.wordOriginal!=='boolean')throw Error('Invalid Word view');
+    const next={...b};for(const key of ['wordOriginal','title','location','progress','favorite','cover','pageCount','collectionNotebookId'])if(key in patch)next[key]=patch[key];
     if(Object.keys(patch).some(key=>key!=='collectionNotebookId'))next.lastRead=new Date().toISOString();
     store.replaceState({...store.state,books:store.state.books.map(book=>book.id===id?next:book)});return next;
   });
@@ -127,6 +154,7 @@ app.whenReady().then(async()=>{
   handle('wordbooks:import',(token,input)=>wordbooks.commit(token,input));
   handle('dictionary:custom-gloss',text=>dictionary.customGloss(String(text).slice(0,150)))
   handle('dictionary:lookup',text=>dictionary.lookup(String(text).slice(0,150)));
+  handle('dictionary:suggest',text=>dictionary.suggest(String(text).slice(0,150)));
   handle('dictionary:history',()=>dictionaryHistory.list());
   handle('dictionary:history-add',input=>dictionaryHistory.add(input));
   handle('dictionary:history-clear',()=>dictionaryHistory.clear());
@@ -147,6 +175,8 @@ app.whenReady().then(async()=>{
   handle('dictionary:details',(input,generate)=>wordDetails(input,generate===true));
   handle('entries:production',id=>productionService.prepare(id));
   handle('entries:production-draft',(id,exerciseId,text)=>productionService.draft(id,exerciseId,text));
+  handle('entries:production-hint',(id,exerciseId)=>productionService.hint(id,exerciseId));
+  handle('entries:production-defer',(id,exerciseId)=>productionService.defer(id,exerciseId));
   handle('entries:production-answer',(id,exerciseId,text)=>productionService.submit(id,exerciseId,text));
   handle('dictionary:example',input=>{
     if(!input||typeof input.text!=='string'||!input.text.trim()||input.text.length>100||typeof input.translation!=='string'||input.translation.length>4000)throw Error('请输入有效的单词和释义');
@@ -176,14 +206,21 @@ app.whenReady().then(async()=>{
     if(found){if(!e.translation){e.translation=found.translation||found.definition;e.source=found.source;}e.definition=e.definition||found.definition;e.phonetic=found.phonetic;e.dictionaryWord=found.word;e.cueWords=found.cueWords;e.status='ready';if(/[\u3400-\u9fff]/.test(text))e.kind='word';}
     collectMembership(store.state,e,input);store.state.entries.unshift(e);store.save();libraryExamples.queue();return e;
   });
-  handle('entries:translate',async id=>{const e=entryById(id);const {dictionary:found,...result}=await translate(e.text,e.context,store.state.settings,getKey(),e.kind);await rememberAiWord(found);const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
+  handle('entries:translate',async id=>{const e=entryById(id);const {dictionary:found,...result}=await translate(e.text,e.context,store.state.settings,getKey(),e.kind);await rememberAiWord(found);rememberContextMeaning(e.text,e.context,result);const current=entryById(id);Object.assign(current,result,{updatedAt:new Date().toISOString()});store.save();return current;});
   handle('entries:cloze',id=>clozeService.prepare(id));
   handle('entries:cloze-answer',(id,exerciseId,answer)=>clozeService.submit(id,exerciseId,answer));
   handle('entries:cloze-hint',(id,exerciseId)=>clozeService.hint(id,exerciseId));
-  handle('selection:translate',async(text,context,kind)=>{const result=await translate(normalize(text).slice(0,5000),normalize(context).slice(0,12000),store.state.settings,getKey(),kind==='word'?'word':'sentence');await rememberAiWord(result.dictionary);return result;});
+  handle('selection:translate',async(text,context,kind)=>{const clean=normalize(text).slice(0,5000);const nearby=normalize(context).slice(0,12000);const result=await translate(clean,nearby,store.state.settings,getKey(),kind==='word'?'word':'sentence');await rememberAiWord(result.dictionary);rememberContextMeaning(clean,nearby,result);return result;});
+  handle('context:meaning',word=>contextMeanings.get(String(word||'')));
+  handle('context:clear',()=>contextMeanings.clear());
   handle('entries:update',(id,patch)=>{const e=entryById(id);if('reviewTarget' in patch){const target=normalize(patch.reviewTarget);if(target.length>80||target&&!e.text.toLocaleLowerCase().includes(target.toLocaleLowerCase()))throw Error('填空目标必须是原句中的词或短语');patch={...patch,reviewTarget:target};}for(const key of ['translation','definition','context','note','suspended','kind','reviewTarget'])if(key in patch)e[key]=patch[key];e.status=e.translation?'ready':'pending';store.save();return e;});
   handle('entries:delete',id=>{store.deleteEntries([id]);libraryExamples.queue();return true;});
   handle('entries:delete-many',ids=>{const count=store.deleteEntries(ids);libraryExamples.queue();return count;});
+  handle('entries:study',id=>{
+    const entry=entryById(id),updated=studyEntry(entry);
+    if(updated!==entry)store.replaceState({...store.state,entries:store.state.entries.map(item=>item.id===id?updated:item)});
+    return updated;
+  });
   handle('entries:review',(id,rating,mode='meaning')=>{
     const e=entryById(id);if(!e.translation)throw Error('请先补全译文再复习');
     const time=new Date(),updated=reviewEntry(e,rating,time,mode),record={entryId:id,mode,rating,time:time.toISOString(),isNew:isUnreviewed(e)};
@@ -215,6 +252,15 @@ app.whenReady().then(async()=>{
     store.save();if('language' in updates)updateMenu();if('theme' in updates||'colorThemes' in updates)updateChrome();if('dictionarySources' in updates)dictionary.setSources(store.state.settings.dictionarySources);return {...store.state.settings,apiKeySet:!!getKey()};
   });
   handle('settings:test-api',()=>translate('Learning builds lasting understanding.','',store.state.settings,getKey()));
+  // Calibrate the forgetting curve against this learner's own reviews. Nothing
+  // leaves the machine and the default is kept unless the fit wins on holdout.
+  handle('review:calibrate',()=>{
+    const report=calibrate(store.state);
+    if(report.status==='fitted'&&setDecay(report.decay)){
+      store.state.settings.fsrsDecay=report.decay;store.save();
+    }
+    return report;
+  });
   handle('speech:generate',generateSpeech);
   ipcMain.handle('speech:start',(event,id,text,enVoice,zhVoice)=>speechService.stream(String(id),text,enVoice,zhVoice,event.sender));
   ipcMain.handle('speech:cancel',(event,id)=>speechService.cancel(String(id),event.sender));

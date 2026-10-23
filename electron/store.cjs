@@ -5,7 +5,7 @@ const {withReviewSkills}=require('./core.cjs');
 const {enabledMethods,inferNotebookKind}=require('../shared/review-policy.mjs');
 const DEFAULTS = { theme: 'paper', readerPanelWidth:360, readerPanelTab:'translation', annotationColor:'yellow', colorThemes:{}, fontSize: 19, lineHeight: 1.9, contentWidth: 760, fontFamily: 'serif', uiFont:'Inter',uiFontSize:16,readingFont:'',pdfTextMode:false,
   autoSave: true, autoSaveSentences:false, preloadSpeech:true, hoverTranslate: false, rate: 1, enVoice: 0, zhVoice: 3, language:'zh', continuousRead:true,
-  newPerDay: 20, vocabPageSize:20,reviewMethods:['meaning','cloze','spelling'],reviewMode: 'meaning', sentenceReviewMode:'meaning', reviewCustomDictionary:true, apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false,
+  newPerDay: 20, newBatch: 5, vocabPageSize:20,reviewMethods:['meaning','cloze','spelling'],reviewMode: 'meaning', sentenceReviewMode:'meaning', reviewCustomDictionary:true, apiBase: 'https://api.deepseek.com', apiModel: 'deepseek-flash', apiKeySet: false,
   dictionarySources:['ecdict','cedict','wiktionary','wordnet'] };
 class Store {
   constructor(dir) {
